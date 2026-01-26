@@ -4,6 +4,8 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use ical_merge::config::Config;
 use ical_merge::error::Result;
+use ical_merge::fetcher::Fetcher;
+use ical_merge::server::{create_router, AppState};
 
 #[derive(Parser)]
 #[command(name = "ical-merge")]
@@ -41,13 +43,22 @@ async fn main() -> Result<()> {
         config.server.port = port;
     }
 
-    tracing::info!(
-        "Starting server on {}:{}",
-        config.server.bind_address,
-        config.server.port
-    );
-    tracing::info!("Configured calendars: {:?}", config.calendars.keys());
+    let bind_addr = format!("{}:{}", config.server.bind_address, config.server.port);
 
-    // TODO: Start server
+    tracing::info!("Starting server on {}", bind_addr);
+    tracing::info!(
+        "Configured calendars: {:?}",
+        config.calendars.keys().collect::<Vec<_>>()
+    );
+
+    let fetcher = Fetcher::new()?;
+    let state = AppState::new(config, fetcher);
+    let app = create_router(state);
+
+    let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
+    tracing::info!("Server listening on {}", bind_addr);
+
+    axum::serve(listener, app).await?;
+
     Ok(())
 }
