@@ -1,0 +1,44 @@
+{
+  "server": {
+    "bind_address": "127.0.0.1",
+    "port": 8080
+  },
+  "calendars": {
+    "combined-work": {
+      "sources": [
+        {
+          "url": "https://example.com/work.ics",
+          "filters": {
+            "allow": [
+              {
+                "pattern": "(?i)meeting"
+              }
+            ],
+            "deny": [
+              {
+                "pattern": "(?i)optional",
+                "fields": ["summary"]
+              }
+            ]
+          },
+          "modifiers": [
+            {
+              "pattern": "^Meeting:",
+              "replacement": "[WORK] "
+            }
+          ]
+        },
+        {
+          "url": "https://example.com/holidays.ics"
+        }
+      ]
+    },
+    "personal": {
+      "sources": [
+        {
+          "url": "https://example.com/personal.ics"
+        }
+      ]
+    }
+  }
+}
