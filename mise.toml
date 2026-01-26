@@ -1,0 +1,11 @@
+[tasks.run]
+run = "cargo run"
+
+[tasks.lint]
+run = "cargo clippy"
+
+[tasks.build]
+run = "cargo build"
+
+[tasks.test]
+run = "cargo test"
