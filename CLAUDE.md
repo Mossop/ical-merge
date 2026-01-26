@@ -40,6 +40,23 @@ HTTP Request → Server Handler → Merge Logic → [Concurrent Fetching] → Fi
 
 ## Key Design Decisions
 
+### Config Hot-Reloading
+**Location**: `watcher.rs`, `server.rs:AppState`
+
+The config file is automatically watched for changes using `notify::PollWatcher`:
+- **PollWatcher** is used (not event-based) for Docker bind mount compatibility
+- Poll interval: 2 seconds in production, 500ms in tests
+- Config is behind `Arc<RwLock<Config>>` for thread-safe updates
+- Invalid configs are rejected - old config stays active
+- No server restart needed for config changes
+
+When config changes:
+1. File watcher detects modification
+2. New config is loaded and validated
+3. If valid: atomically swapped in via RwLock
+4. If invalid: logged as error, old config retained
+5. In-flight requests use consistent config snapshot (read lock)
+
 ### Filter Logic (IMPORTANT!)
 **Location**: `filter/rules.rs:should_include()`
 
@@ -74,6 +91,7 @@ Sources are fetched concurrently using `futures::future::join_all`. This is crit
 - **icalendar**: Battle-tested RFC 5545 parsing/serialization
 - **regex**: Filter patterns and modifiers
 - **futures**: For `join_all` (concurrent fetching)
+- **notify**: File watching for config hot-reload (PollWatcher for Docker compatibility)
 
 ## Code Conventions
 
@@ -98,7 +116,21 @@ Sources are fetched concurrently using `futures::future::join_all`. This is crit
 - Allow mutation without complex borrow issues
 - Abstract away property traversal complexity
 
+### Thread Safety with RwLock
+Config is accessed via `Arc<RwLock<Config>>`:
+- Handlers acquire **read lock**, clone needed calendar config, then release
+- Watcher acquires **write lock** only during reload
+- This pattern minimizes lock contention - handlers don't block each other
+- Calendar configs must be `Clone` to enable lock-free processing
+
 ## Common Tasks
+
+### Testing Config Reload
+Use the helper function for fast testing:
+```rust
+start_config_watcher_with_interval(state, Duration::from_millis(500))
+```
+Production uses 2 second interval, but tests need faster polling.
 
 ### Adding a New Filter Field
 1. Update `Event` accessors in `ical/types.rs` if needed
@@ -138,6 +170,13 @@ Filters and modifiers compile regexes once during config load. Don't compile reg
 
 ### Borrow Checker in Modifiers
 `modifier.apply()` must clone the summary string before modifying because we need both immutable (read) and mutable (write) access to the event.
+
+### PollWatcher for Docker Compatibility
+`notify::PollWatcher` is used instead of event-based watchers because:
+- Filesystem events often don't work through Docker bind mounts
+- Polling is reliable across all platforms and mount types
+- 2 second interval is acceptable latency for config changes
+- The watcher is kept alive by moving it into the tokio task
 
 ## Configuration Schema
 
@@ -206,7 +245,8 @@ fn create_event(summary: &str, description: Option<&str>) -> Event {
 2. No authentication for source URLs or served endpoints
 3. Only summary field is modifiable
 4. No health check or metrics endpoints
-5. Vendor X-* properties may be lost in round-trip
+5. Config reload has ~2 second latency (poll interval)
+6. Vendor X-* properties may be lost in round-trip
 
 ### Potential Enhancements
 - TTL-based caching (add `cached` crate)

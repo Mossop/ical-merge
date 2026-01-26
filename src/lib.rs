@@ -5,3 +5,4 @@ pub mod filter;
 pub mod ical;
 pub mod merge;
 pub mod server;
+pub mod watcher;

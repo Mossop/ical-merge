@@ -71,6 +71,16 @@ Access merged calendars:
 curl http://localhost:8080/ical/my-calendar
 ```
 
+### Hot-Reload Configuration
+
+Simply edit `config.json` and save - changes are automatically detected and applied within ~2 seconds. No server restart needed!
+
+The config watcher:
+- Uses polling (not filesystem events) for Docker bind mount compatibility
+- Validates new config before applying
+- Keeps old config if new one is invalid
+- Logs all reload attempts
+
 ## Environment Variables
 
 Configuration can be overridden with environment variables prefixed with `ICAL_MERGE_`:

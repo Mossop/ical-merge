@@ -14,6 +14,9 @@ pub enum Error {
 
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
+
+    #[error("File watcher error: {0}")]
+    Notify(#[from] notify::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

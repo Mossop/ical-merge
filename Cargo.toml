@@ -17,6 +17,7 @@ thiserror = "2"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"
+notify = "7"
 
 [dev-dependencies]
 wiremock = "0.6"

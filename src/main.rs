@@ -6,6 +6,7 @@ use ical_merge::config::Config;
 use ical_merge::error::Result;
 use ical_merge::fetcher::Fetcher;
 use ical_merge::server::{create_router, AppState};
+use ical_merge::watcher::start_config_watcher;
 
 #[derive(Parser)]
 #[command(name = "ical-merge")]
@@ -52,8 +53,12 @@ async fn main() -> Result<()> {
     );
 
     let fetcher = Fetcher::new()?;
-    let state = AppState::new(config, fetcher);
-    let app = create_router(state);
+    let state = AppState::new(config, cli.config.clone(), fetcher);
+    let app = create_router(state.clone());
+
+    // Start config file watcher
+    start_config_watcher(state.clone())?;
+    tracing::info!("Config file watcher started");
 
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     tracing::info!("Server listening on {}", bind_addr);

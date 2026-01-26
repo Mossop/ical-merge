@@ -73,7 +73,8 @@ async fn test_full_flow_fetch_filter_modify_merge_serve() {
     };
 
     let fetcher = Fetcher::new().unwrap();
-    let state = AppState::new(config, fetcher);
+    let config_path = std::env::temp_dir().join("test-integration-config.json");
+    let state = AppState::new(config, config_path, fetcher);
     let app = create_router(state);
 
     // Make request

@@ -1,4 +1,5 @@
-use std::sync::Arc;
+use std::path::PathBuf;
+use std::sync::{Arc, RwLock};
 
 use axum::{
     extract::{Path, State},
@@ -16,16 +17,34 @@ use crate::merge::merge_calendars;
 /// Application state shared across handlers
 #[derive(Clone)]
 pub struct AppState {
-    pub config: Arc<Config>,
+    pub config: Arc<RwLock<Config>>,
+    pub config_path: Arc<PathBuf>,
     pub fetcher: Arc<Fetcher>,
 }
 
 impl AppState {
-    pub fn new(config: Config, fetcher: Fetcher) -> Self {
+    pub fn new(config: Config, config_path: PathBuf, fetcher: Fetcher) -> Self {
         Self {
-            config: Arc::new(config),
+            config: Arc::new(RwLock::new(config)),
+            config_path: Arc::new(config_path),
             fetcher: Arc::new(fetcher),
         }
+    }
+
+    /// Reload configuration from file
+    pub fn reload_config(&self) -> crate::error::Result<()> {
+        tracing::info!("Reloading configuration from {:?}", self.config_path);
+
+        // Load and validate new config
+        let new_config = Config::load(&*self.config_path)?;
+        new_config.validate()?;
+
+        // Swap in new config
+        let mut config = self.config.write().unwrap();
+        *config = new_config;
+
+        tracing::info!("Configuration reloaded successfully");
+        Ok(())
     }
 }
 
@@ -41,15 +60,18 @@ async fn get_calendar(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    // Look up calendar config
-    let calendar_config = state
-        .config
-        .calendars
-        .get(&id)
-        .ok_or_else(|| AppError::NotFound(format!("Calendar '{}' not found", id)))?;
+    // Acquire read lock and clone the calendar config we need
+    let calendar_config = {
+        let config = state.config.read().unwrap();
+        config
+            .calendars
+            .get(&id)
+            .cloned()
+            .ok_or_else(|| AppError::NotFound(format!("Calendar '{}' not found", id)))?
+    };
 
-    // Merge calendars
-    let merge_result = merge_calendars(calendar_config, &state.fetcher).await?;
+    // Merge calendars (lock is released here)
+    let merge_result = merge_calendars(&calendar_config, &state.fetcher).await?;
 
     // Log any errors but still serve partial data
     for (url, err) in &merge_result.errors {
@@ -148,7 +170,8 @@ END:VCALENDAR"#;
         };
 
         let fetcher = Fetcher::new().unwrap();
-        let state = AppState::new(config, fetcher);
+        let config_path = std::env::temp_dir().join("test-config.json");
+        let state = AppState::new(config, config_path, fetcher);
         let app = create_router(state);
 
         let request = Request::builder()
@@ -179,7 +202,8 @@ END:VCALENDAR"#;
         };
 
         let fetcher = Fetcher::new().unwrap();
-        let state = AppState::new(config, fetcher);
+        let config_path = std::env::temp_dir().join("test-config.json");
+        let state = AppState::new(config, config_path, fetcher);
         let app = create_router(state);
 
         let request = Request::builder()
@@ -233,7 +257,8 @@ END:VCALENDAR"#;
         };
 
         let fetcher = Fetcher::new().unwrap();
-        let state = AppState::new(config, fetcher);
+        let config_path = std::env::temp_dir().join("test-config.json");
+        let state = AppState::new(config, config_path, fetcher);
         let app = create_router(state);
 
         let request = Request::builder()
