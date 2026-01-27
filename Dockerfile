@@ -22,7 +22,8 @@ FROM alpine:latest
 
 # Install runtime dependencies
 # ca-certificates needed for HTTPS requests (rustls needs root certificates)
-RUN apk add --no-cache ca-certificates tzdata
+# tini needed for proper signal handling (Ctrl-C, etc.)
+RUN apk add --no-cache ca-certificates tzdata tini
 
 # Create non-root user
 RUN addgroup -g 1000 icalmerge && \
@@ -48,5 +49,5 @@ EXPOSE 8080
 ENV ICAL_MERGE_BIND=0.0.0.0 \
     ICAL_MERGE_PORT=8080
 
-# Run the binary (defaults to serve command, reads environment variables)
-ENTRYPOINT ["/usr/local/bin/ical-merge"]
+# Run the binary with tini for proper signal handling (Ctrl-C support)
+ENTRYPOINT ["/sbin/tini", "--", "/usr/local/bin/ical-merge"]
