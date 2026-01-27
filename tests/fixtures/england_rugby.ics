@@ -1,0 +1,187 @@
+BEGIN:VCALENDAR
+PRODID:-//E-DIARY//E-DIARY 1.0//EN
+VERSION:2.0
+METHOD:PUBLISH
+X-WR-CALNAME:England Rugby
+X-Built-On-Cache-Miss:true
+BEGIN:VEVENT
+LAST-MODIFIED:00010101T000000Z
+DTSTAMP:00010101T000000Z
+LOCATION:Allianz Stadium
+X-ECAL-SCHEDULE:
+DTSTART:20260207T164000Z
+DTEND:20260207T184000Z
+SUMMARY:🏉 🏴󠁧󠁢󠁥󠁮󠁧󠁿 England vs 🏴󠁧󠁢󠁷󠁬
+ 󠁳󠁿 Wales | Six Nations
+TRANSP:TRANSPARENT
+SEQUENCE:0
+UID:686770ee96ed780a434e133b
+PRIORITY:5
+X-MICROSOFT-CDO-IMPORTANCE:1
+CLASS:PUBLIC
+DESCRIPTION:Catch the excitement of International Rugby!\n\nBuy Tickets\nht
+ tps://cal.englandrugby.com/f/27gpSZ/3kNq9\n\nEngland Rugby Store\nhttps://c
+ al.englandrugby.com/f/27gpT7/3kNq9\n\nMatch Centre\nhttps://cal.englandrugb
+ y.com/f/VgmJw/3kNq9\n\nEngland Rugby Instagram\nhttps://cal.englandrugby.co
+ m/f/27gpTj/3kNq9\n\nRed Roses Instagram\nhttps://cal.englandrugby.com/f/27g
+ pTp/3kNq9\n\nFacebook\nhttps://cal.englandrugby.com/f/VgmLj/3kNq9\n\nX\nhtt
+ ps://cal.englandrugby.com/f/VgmLV/3kNq9\n\nInstagram\nhttps://cal.englandru
+ gby.com/f/VgmMq/3kNq9\n\nTikTok\nhttps://cal.englandrugby.com/f/VgmMV/3kNq9
+ \n\nManage my ECAL\nhttps://cal.englandrugby.com/f/VgmPh/3kNq9\n\n
+X-ECAL-SCHEDULE:673dc2c9d745979951532787
+BEGIN:VALARM
+TRIGGER:-P2DT
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT1H
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+LAST-MODIFIED:00010101T000000Z
+DTSTAMP:00010101T000000Z
+LOCATION:Scottish Gas Murrayfield
+X-ECAL-SCHEDULE:
+DTSTART:20260214T164000Z
+DTEND:20260214T184000Z
+SUMMARY:🏉 🏴󠁧󠁢󠁳󠁣󠁴󠁿 Scotland vs 🏴󠁧󠁢󠁥󠁮
+ 󠁧󠁿 England | Six Nations
+TRANSP:TRANSPARENT
+SEQUENCE:0
+UID:686770ee96ed780a434e133c
+PRIORITY:5
+X-MICROSOFT-CDO-IMPORTANCE:1
+CLASS:PUBLIC
+DESCRIPTION:Catch the excitement of International Rugby!\n\nBuy Tickets\nht
+ tps://cal.englandrugby.com/f/27gpTK/3kNq9\n\nEngland Rugby Store\nhttps://c
+ al.englandrugby.com/f/27gpTS/3kNq9\n\nMatch Centre\nhttps://cal.englandrugb
+ y.com/f/VgmRf/3kNq9\n\nEngland Rugby Instagram\nhttps://cal.englandrugby.co
+ m/f/27gpTZ/3kNq9\n\nRed Roses Instagram\nhttps://cal.englandrugby.com/f/27g
+ pV4/3kNq9\n\nFacebook\nhttps://cal.englandrugby.com/f/VgmSH/3kNq9\n\nX\nhtt
+ ps://cal.englandrugby.com/f/VgmT6/3kNq9\n\nInstagram\nhttps://cal.englandru
+ gby.com/f/VgmTC/3kNq9\n\nTikTok\nhttps://cal.englandrugby.com/f/VgmV5/3kNq9
+ \n\nManage my ECAL\nhttps://cal.englandrugby.com/f/VgmWK/3kNq9\n\n
+X-ECAL-SCHEDULE:673dc2c9d745979951532787
+BEGIN:VALARM
+TRIGGER:-P2DT
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT1H
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+LAST-MODIFIED:00010101T000000Z
+DTSTAMP:00010101T000000Z
+LOCATION:Allianz Stadium
+X-ECAL-SCHEDULE:
+DTSTART:20260221T141000Z
+DTEND:20260221T161000Z
+SUMMARY:🏉 🏴󠁧󠁢󠁥󠁮󠁧󠁿 England vs 🇮🇪 Ireland | Six
+  Nations
+TRANSP:TRANSPARENT
+SEQUENCE:0
+UID:686770ee96ed780a434e133d
+PRIORITY:5
+X-MICROSOFT-CDO-IMPORTANCE:1
+CLASS:PUBLIC
+DESCRIPTION:Catch the excitement of International Rugby!\n\nBuy Tickets\nht
+ tps://cal.englandrugby.com/f/27gpVC/3kNq9\n\nEngland Rugby Store\nhttps://c
+ al.englandrugby.com/f/27gpVL/3kNq9\n\nMatch Centre\nhttps://cal.englandrugb
+ y.com/f/VgmXV/3kNq9\n\nEngland Rugby Instagram\nhttps://cal.englandrugby.co
+ m/f/27gpVQ/3kNq9\n\nRed Roses Instagram\nhttps://cal.englandrugby.com/f/27g
+ pVY/3kNq9\n\nFacebook\nhttps://cal.englandrugby.com/f/VgmZB/3kNq9\n\nX\nhtt
+ ps://cal.englandrugby.com/f/Vgn1c/3kNq9\n\nInstagram\nhttps://cal.englandru
+ gby.com/f/Vgn1v/3kNq9\n\nTikTok\nhttps://cal.englandrugby.com/f/Vgn2d/3kNq9
+ \n\nManage my ECAL\nhttps://cal.englandrugby.com/f/Vgn3P/3kNq9\n\n
+X-ECAL-SCHEDULE:673dc2c9d745979951532787
+BEGIN:VALARM
+TRIGGER:-P2DT
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT1H
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+LAST-MODIFIED:00010101T000000Z
+DTSTAMP:00010101T000000Z
+LOCATION:Stadio Olimpico
+X-ECAL-SCHEDULE:
+DTSTART:20260307T164000Z
+DTEND:20260307T184000Z
+SUMMARY:🏉 🇮🇹 Italy vs 🏴󠁧󠁢󠁥󠁮󠁧󠁿 England | Six N
+ ations
+TRANSP:TRANSPARENT
+SEQUENCE:0
+UID:686770ee96ed780a434e133e
+PRIORITY:5
+X-MICROSOFT-CDO-IMPORTANCE:1
+CLASS:PUBLIC
+DESCRIPTION:Catch the excitement of International Rugby!\n\nBuy Tickets\nht
+ tps://cal.englandrugby.com/f/27gpWl/3kNq9\n\nEngland Rugby Store\nhttps://c
+ al.englandrugby.com/f/27gpWv/3kNq9\n\nMatch Centre\nhttps://cal.englandrugb
+ y.com/f/Vgn4Y/3kNq9\n\nEngland Rugby Instagram\nhttps://cal.englandrugby.co
+ m/f/27gpWB/3kNq9\n\nRed Roses Instagram\nhttps://cal.englandrugby.com/f/27g
+ pWJ/3kNq9\n\nFacebook\nhttps://cal.englandrugby.com/f/Vgn6K/3kNq9\n\nX\nhtt
+ ps://cal.englandrugby.com/f/Vgn7h/3kNq9\n\nInstagram\nhttps://cal.englandru
+ gby.com/f/Vgn7L/3kNq9\n\nTikTok\nhttps://cal.englandrugby.com/f/Vgn88/3kNq9
+ \n\nManage my ECAL\nhttps://cal.englandrugby.com/f/Vgn9B/3kNq9\n\n
+X-ECAL-SCHEDULE:673dc2c9d745979951532787
+BEGIN:VALARM
+TRIGGER:-P2DT
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT1H
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+END:VEVENT
+BEGIN:VEVENT
+LAST-MODIFIED:00010101T000000Z
+DTSTAMP:00010101T000000Z
+LOCATION:Stade de France
+X-ECAL-SCHEDULE:
+DTSTART:20260314T201000Z
+DTEND:20260314T221000Z
+SUMMARY:🏉 🇫🇷 France vs 🏴󠁧󠁢󠁥󠁮󠁧󠁿 England | Six 
+ Nations
+TRANSP:TRANSPARENT
+SEQUENCE:0
+UID:686770ee96ed780a434e133f
+PRIORITY:5
+X-MICROSOFT-CDO-IMPORTANCE:1
+CLASS:PUBLIC
+DESCRIPTION:Catch the excitement of International Rugby!\n\nBuy Tickets\nht
+ tps://cal.englandrugby.com/f/27gpX6/3kNq9\n\nEngland Rugby Store\nhttps://c
+ al.englandrugby.com/f/27gpXb/3kNq9\n\nMatch Centre\nhttps://cal.englandrugb
+ y.com/f/Vgnby/3kNq9\n\nEngland Rugby Instagram\nhttps://cal.englandrugby.co
+ m/f/27gpXk/3kNq9\n\nRed Roses Instagram\nhttps://cal.englandrugby.com/f/27g
+ pXq/3kNq9\n\nFacebook\nhttps://cal.englandrugby.com/f/Vgndf/3kNq9\n\nX\nhtt
+ ps://cal.englandrugby.com/f/VgndM/3kNq9\n\nInstagram\nhttps://cal.englandru
+ gby.com/f/Vgnfl/3kNq9\n\nTikTok\nhttps://cal.englandrugby.com/f/VgnfS/3kNq9
+ \n\nManage my ECAL\nhttps://cal.englandrugby.com/f/Vgnhk/3kNq9\n\n
+X-ECAL-SCHEDULE:673dc2c9d745979951532787
+BEGIN:VALARM
+TRIGGER:-P2DT
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+BEGIN:VALARM
+TRIGGER:-PT1H
+ACTION:DISPLAY
+DESCRIPTION:Reminder
+END:VALARM
+END:VEVENT
+END:VCALENDAR

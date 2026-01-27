@@ -1,9 +1,28 @@
 use super::types::{Calendar, Event};
 use crate::error::{Error, Result};
 
+/// Sanitize iCal text to fix common malformed data issues
+fn sanitize_ical(ical_text: &str) -> String {
+    ical_text
+        .lines()
+        .map(|line| {
+            // Fix malformed TRIGGER values like "TRIGGER:-P2DT" (empty time component)
+            // These should be "TRIGGER:-P2D" (duration without time)
+            if line.starts_with("TRIGGER:") && line.ends_with('T') {
+                line.trim_end_matches('T').to_string()
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 /// Parse iCal text into a Calendar with Events
 pub fn parse_calendar(ical_text: &str) -> Result<Calendar> {
-    let parsed = ical_text
+    let sanitized = sanitize_ical(ical_text);
+
+    let parsed = sanitized
         .parse::<icalendar::Calendar>()
         .map_err(|e| Error::Parse(format!("Failed to parse iCal: {}", e)))?;
 
@@ -124,5 +143,59 @@ END:VCALENDAR"#;
             assert_eq!(calendar.events().len(), 0);
         }
         // Or it might fail, which is also acceptable
+    }
+
+    #[test]
+    fn test_sanitize_malformed_trigger() {
+        let malformed = r#"BEGIN:VCALENDAR
+VERSION:2.0
+BEGIN:VEVENT
+UID:test@example.com
+DTSTAMP:20231201T120000Z
+SUMMARY:Test Event
+BEGIN:VALARM
+TRIGGER:-P2DT
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT
+END:VCALENDAR"#;
+
+        let calendar = parse_calendar(malformed).unwrap();
+        let events = calendar.events();
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].summary(), Some("Test Event"));
+    }
+
+    #[test]
+    fn test_parse_england_rugby_fixture() {
+        let ical_text = include_str!("../../tests/fixtures/england_rugby.ics");
+        let calendar = parse_calendar(ical_text).unwrap();
+        let events = calendar.events();
+
+        // The England Rugby calendar should have multiple events
+        assert!(
+            !events.is_empty(),
+            "Expected events from England Rugby calendar"
+        );
+
+        // Verify at least one event has the expected structure
+        let first_event = &events[0];
+        assert!(first_event.summary().is_some());
+        assert!(first_event.uid().is_some());
+    }
+
+    #[test]
+    fn test_parse_the_fa_fixture() {
+        let ical_text = include_str!("../../tests/fixtures/the_fa.ics");
+        let calendar = parse_calendar(ical_text).unwrap();
+        let events = calendar.events();
+
+        // The FA calendar should have multiple events
+        assert!(!events.is_empty(), "Expected events from The FA calendar");
+
+        // Verify at least one event has the expected structure
+        let first_event = &events[0];
+        assert!(first_event.summary().is_some());
+        assert!(first_event.uid().is_some());
     }
 }
