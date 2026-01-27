@@ -1,0 +1,105 @@
+# Example configuration file for ical-merge (TOML format)
+# You can also use JSON format - just use .json extension instead
+
+[server]
+bind_address = "127.0.0.1"
+port = 8080
+
+# Combined work calendar with filtering and modification
+[calendars.combined-work]
+
+[[calendars.combined-work.sources]]
+url = "https://example.com/work.ics"
+
+# Deny events with "optional" in summary
+[[calendars.combined-work.sources.steps]]
+type = "deny"
+patterns = ["(?i)optional"]
+mode = "any"
+fields = ["summary"]
+
+# Only allow events with "meeting"
+[[calendars.combined-work.sources.steps]]
+type = "allow"
+patterns = ["(?i)meeting"]
+# mode defaults to "any"
+# fields defaults to ["summary", "description"]
+
+# Replace "Meeting:" prefix with "[WORK]"
+[[calendars.combined-work.sources.steps]]
+type = "replace"
+pattern = "^Meeting:"
+replacement = "[WORK] "
+field = "summary"
+
+# Remove bell emoji (replacement defaults to empty string to remove text)
+[[calendars.combined-work.sources.steps]]
+type = "replace"
+pattern = "🔔 "
+# replacement defaults to ""
+# field defaults to "summary"
+
+# Replace location
+[[calendars.combined-work.sources.steps]]
+type = "replace"
+pattern = "Building A"
+replacement = "Main Office"
+field = "location"
+
+# Strip reminders
+[[calendars.combined-work.sources.steps]]
+type = "strip"
+field = "reminder"
+
+# Transform to sentence case
+# Transform can be: lower, upper, sentence, or title. Field defaults to summary.
+[[calendars.combined-work.sources.steps]]
+type = "case"
+transform = "sentence"
+# field defaults to "summary"
+
+# Second source - holidays calendar
+# webcal:// and webcals:// URLs are also supported (e.g., webcal://example.com/cal.ics)
+[[calendars.combined-work.sources]]
+url = "https://example.com/holidays.ics"
+steps = []
+
+# No calendar-level steps for combined-work
+calendars.combined-work.steps = []
+
+# Personal calendar with prefix
+[calendars.personal]
+
+[[calendars.personal.sources]]
+url = "https://example.com/personal.ics"
+steps = []
+
+# Calendar-level step: add [PERSONAL] prefix to all events
+[[calendars.personal.steps]]
+type = "replace"
+pattern = "^"
+replacement = "[PERSONAL] "
+field = "summary"
+
+# Everything calendar - demonstrates calendar references
+[calendars.everything]
+
+# Calendar references allow using other calendars as sources
+[[calendars.everything.sources]]
+# References the 'combined-work' calendar defined above
+calendar = "combined-work"
+
+# Source-level steps are applied to the referenced calendar's events
+[[calendars.everything.sources.steps]]
+type = "replace"
+pattern = "^"
+replacement = "[WORK] "
+field = "summary"
+
+# References can be mixed with URL sources in the same calendar
+[[calendars.everything.sources]]
+calendar = "personal"
+steps = []
+
+# No calendar-level steps
+calendars.everything.steps = []

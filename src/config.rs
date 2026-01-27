@@ -1,6 +1,6 @@
 use figment::{
     Figment,
-    providers::{Env, Format, Json},
+    providers::{Env, Format, Json, Toml},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -148,8 +148,16 @@ pub enum Step {
 
 impl Config {
     pub fn load(path: impl AsRef<Path>) -> Result<Self> {
-        Figment::new()
-            .merge(Json::file(path.as_ref()))
+        let path = path.as_ref();
+        let extension = path.extension().and_then(|s| s.to_str()).unwrap_or("json");
+
+        let figment = Figment::new();
+        let figment = match extension {
+            "toml" => figment.merge(Toml::file(path)),
+            _ => figment.merge(Json::file(path)),
+        };
+
+        figment
             .merge(Env::prefixed("ICAL_MERGE_"))
             .extract()
             .map_err(|e| Error::Config(e.to_string()))
@@ -727,5 +735,166 @@ mod tests {
             calendars,
         };
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_config_parsing_toml() {
+        let config_toml = r#"
+[server]
+bind_address = "0.0.0.0"
+port = 9090
+
+[calendars.test]
+
+[[calendars.test.sources]]
+url = "https://example.com/test.ics"
+steps = []
+
+calendars.test.steps = []
+"#;
+
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join("test_config.toml");
+        fs::write(&config_path, config_toml).unwrap();
+
+        let config = Config::load(&config_path).unwrap();
+        assert_eq!(config.server.bind_address, "0.0.0.0");
+        assert_eq!(config.server.port, 9090);
+        assert_eq!(config.calendars.len(), 1);
+        assert!(config.calendars.contains_key("test"));
+
+        fs::remove_file(config_path).unwrap();
+    }
+
+    #[test]
+    fn test_config_toml_with_steps() {
+        let config_toml = r#"
+[calendars.test]
+
+[[calendars.test.sources]]
+url = "https://example.com/test.ics"
+
+[[calendars.test.sources.steps]]
+type = "allow"
+patterns = ["(?i)meeting"]
+mode = "any"
+fields = ["summary"]
+
+[[calendars.test.sources.steps]]
+type = "replace"
+pattern = "^"
+replacement = "[TEST] "
+field = "summary"
+
+[[calendars.test.sources.steps]]
+type = "case"
+transform = "title"
+
+calendars.test.steps = []
+"#;
+
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join("test_config_steps.toml");
+        fs::write(&config_path, config_toml).unwrap();
+
+        let config = Config::load(&config_path).unwrap();
+        assert_eq!(config.calendars.len(), 1);
+
+        let calendar = config.calendars.get("test").unwrap();
+        assert_eq!(calendar.sources.len(), 1);
+
+        let steps = calendar.sources[0].steps();
+        assert_eq!(steps.len(), 3);
+
+        // Verify allow step
+        match &steps[0] {
+            Step::Allow {
+                patterns,
+                mode,
+                fields,
+            } => {
+                assert_eq!(patterns.len(), 1);
+                assert_eq!(patterns[0], "(?i)meeting");
+                assert!(matches!(mode, MatchMode::Any));
+                assert_eq!(fields.len(), 1);
+                assert_eq!(fields[0], "summary");
+            }
+            _ => panic!("Expected Allow step"),
+        }
+
+        // Verify replace step
+        match &steps[1] {
+            Step::Replace {
+                pattern,
+                replacement,
+                field,
+            } => {
+                assert_eq!(pattern, "^");
+                assert_eq!(replacement, "[TEST] ");
+                assert_eq!(field, "summary");
+            }
+            _ => panic!("Expected Replace step"),
+        }
+
+        // Verify case step
+        match &steps[2] {
+            Step::Case { transform, field } => {
+                assert!(matches!(transform, CaseTransform::Title));
+                assert_eq!(field, "summary");
+            }
+            _ => panic!("Expected Case step"),
+        }
+
+        fs::remove_file(config_path).unwrap();
+    }
+
+    #[test]
+    fn test_config_toml_calendar_reference() {
+        let config_toml = r#"
+[calendars.base]
+
+[[calendars.base.sources]]
+url = "https://example.com/base.ics"
+steps = []
+
+calendars.base.steps = []
+
+[calendars.derived]
+
+[[calendars.derived.sources]]
+calendar = "base"
+
+[[calendars.derived.sources.steps]]
+type = "replace"
+pattern = "^"
+replacement = "[DERIVED] "
+field = "summary"
+
+calendars.derived.steps = []
+"#;
+
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join("test_config_ref.toml");
+        fs::write(&config_path, config_toml).unwrap();
+
+        let config = Config::load(&config_path).unwrap();
+        config.validate().unwrap();
+
+        assert_eq!(config.calendars.len(), 2);
+        assert!(config.calendars.contains_key("base"));
+        assert!(config.calendars.contains_key("derived"));
+
+        let derived = config.calendars.get("derived").unwrap();
+        assert_eq!(derived.sources.len(), 1);
+
+        match &derived.sources[0] {
+            SourceConfig::Calendar { calendar, steps } => {
+                assert_eq!(calendar, "base");
+                assert_eq!(steps.len(), 1);
+            }
+            _ => panic!("Expected Calendar source"),
+        }
+
+        fs::remove_file(config_path).unwrap();
     }
 }

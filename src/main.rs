@@ -1,9 +1,9 @@
 use clap::{Parser, Subcommand};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use ical_merge::config::Config;
-use ical_merge::error::Result;
+use ical_merge::error::{Error, Result};
 use ical_merge::fetcher::Fetcher;
 use ical_merge::ical::serialize_events;
 use ical_merge::merge::merge_calendars;
@@ -14,8 +14,13 @@ use ical_merge::watcher::start_config_watcher;
 #[command(name = "ical-merge")]
 #[command(about = "Merge and filter iCal calendars", long_about = None)]
 struct Cli {
-    #[arg(short, long, env = "ICAL_MERGE_CONFIG", default_value = "config.json")]
-    config: PathBuf,
+    #[arg(
+        short,
+        long,
+        env = "ICAL_MERGE_CONFIG",
+        help = "Path to config file (auto-detects config.toml or config.json if not specified)"
+    )]
+    config: Option<PathBuf>,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -43,6 +48,24 @@ enum Command {
     },
 }
 
+/// Find a config file by searching for default names in order
+fn find_config_file() -> Result<PathBuf> {
+    let candidates = ["config.toml", "config.json"];
+
+    for candidate in &candidates {
+        let path = Path::new(candidate);
+        if path.exists() {
+            tracing::info!("Using config file: {}", candidate);
+            return Ok(path.to_path_buf());
+        }
+    }
+
+    Err(Error::Config(format!(
+        "No config file found. Tried: {}. Please specify a config file with -c or set ICAL_MERGE_CONFIG",
+        candidates.join(", ")
+    )))
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     tracing_subscriber::registry()
@@ -55,13 +78,19 @@ async fn main() -> Result<()> {
 
     let cli = Cli::parse();
 
+    // Find config file: use explicit config if provided, otherwise search for defaults
+    let config_path = match cli.config {
+        Some(path) => path,
+        None => find_config_file()?,
+    };
+
     match cli.command.unwrap_or(Command::Serve {
         bind: None,
         port: None,
     }) {
-        Command::Serve { bind, port } => run_serve(cli.config, bind, port).await,
-        Command::Show { calendar_id } => run_show(cli.config, calendar_id).await,
-        Command::Ical { calendar_id } => run_ical(cli.config, calendar_id).await,
+        Command::Serve { bind, port } => run_serve(config_path, bind, port).await,
+        Command::Show { calendar_id } => run_show(config_path, calendar_id).await,
+        Command::Ical { calendar_id } => run_ical(config_path, calendar_id).await,
     }
 }
 
