@@ -89,7 +89,7 @@ mod tests {
     use crate::fetcher::Fetcher;
     use std::collections::HashMap;
     use std::fs;
-    use tokio::time::{sleep, Duration};
+    use tokio::time::{Duration, sleep};
 
     #[tokio::test]
     async fn test_config_reload_on_file_change() {

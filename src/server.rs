@@ -2,11 +2,11 @@ use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
 use axum::{
+    Router,
     extract::{Path, State},
-    http::{header, StatusCode},
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::get,
-    Router,
 };
 
 use crate::config::Config;

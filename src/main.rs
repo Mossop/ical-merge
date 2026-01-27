@@ -116,7 +116,19 @@ async fn run_show(config_path: PathBuf, calendar_id: String) -> Result<()> {
         return Ok(());
     }
 
-    for event in result.events {
+    // Sort events by start time
+    let mut events = result.events;
+    events.sort_by(|a, b| {
+        use std::cmp::Ordering;
+        match (a.start(), b.start()) {
+            (Some(start_a), Some(start_b)) => compare_date_perhaps_time(&start_a, &start_b),
+            (Some(_), None) => Ordering::Less, // Events with start time come first
+            (None, Some(_)) => Ordering::Greater, // Events without start time come last
+            (None, None) => Ordering::Equal,
+        }
+    });
+
+    for event in events {
         let summary = event.summary().unwrap_or("<no summary>");
         let start = event
             .start()
@@ -152,4 +164,32 @@ fn format_date_time(dt: &icalendar::DatePerhapsTime) -> String {
         },
         DatePerhapsTime::Date(date) => date.format("%Y-%m-%d").to_string(),
     }
+}
+
+fn compare_date_perhaps_time(
+    a: &icalendar::DatePerhapsTime,
+    b: &icalendar::DatePerhapsTime,
+) -> std::cmp::Ordering {
+    use icalendar::DatePerhapsTime;
+
+    // Convert DatePerhapsTime to a comparable timestamp (as i64 seconds)
+    // For dates without times, use midnight
+    let to_timestamp = |dpt: &DatePerhapsTime| -> i64 {
+        match dpt {
+            DatePerhapsTime::DateTime(dt) => match dt {
+                icalendar::CalendarDateTime::Floating(naive) => naive.and_utc().timestamp(),
+                icalendar::CalendarDateTime::Utc(utc) => utc.timestamp(),
+                icalendar::CalendarDateTime::WithTimezone { date_time, .. } => {
+                    date_time.and_utc().timestamp()
+                }
+            },
+            DatePerhapsTime::Date(date) => date
+                .and_hms_opt(0, 0, 0)
+                .unwrap()
+                .and_utc()
+                .timestamp(),
+        }
+    };
+
+    to_timestamp(a).cmp(&to_timestamp(b))
 }
