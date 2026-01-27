@@ -82,6 +82,16 @@ Each source has its own filters and modifiers. This is not global - a filter on 
 ### Concurrency
 Sources are fetched concurrently using `futures::future::join_all`. This is critical for performance when merging many sources.
 
+### Calendar URL Schemes
+**Location**: `fetcher.rs:normalize_calendar_url()`
+
+The fetcher supports both standard HTTP schemes and calendar-specific schemes:
+- `http://` and `https://` - used directly
+- `webcal://` - normalized to `http://` before fetching
+- `webcals://` - normalized to `https://` before fetching
+
+The `webcal://` and `webcals://` schemes are commonly used in calendar applications to indicate calendar subscription URLs. The normalization happens transparently in the fetcher, so calendar configs can use any of these schemes interchangeably.
+
 ## Dependencies Rationale
 
 - **tokio**: Async runtime (required for reqwest and axum)

@@ -44,6 +44,7 @@
         },
         {
           "url": "https://example.com/holidays.ics",
+          "comment": "webcal:// and webcals:// URLs are also supported (e.g., webcal://example.com/cal.ics)",
           "steps": []
         }
       ],
