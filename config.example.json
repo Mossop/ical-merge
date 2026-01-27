@@ -8,20 +8,17 @@
       "sources": [
         {
           "url": "https://example.com/work.ics",
-          "filters": {
-            "allow": [
-              {
-                "pattern": "(?i)meeting"
-              }
-            ],
-            "deny": [
-              {
-                "pattern": "(?i)optional",
-                "fields": ["summary"]
-              }
-            ]
-          },
-          "modifiers": [
+          "steps": [
+            {
+              "type": "deny",
+              "patterns": ["(?i)optional"],
+              "mode": "any",
+              "fields": ["summary"]
+            },
+            {
+              "type": "allow",
+              "patterns": ["(?i)meeting"]
+            },
             {
               "type": "replace",
               "pattern": "^Meeting:",
@@ -30,24 +27,41 @@
             },
             {
               "type": "replace",
+              "pattern": "🔔 ",
+              "comment": "replacement defaults to empty string to remove text"
+            },
+            {
+              "type": "replace",
               "pattern": "Building A",
               "replacement": "Main Office",
               "field": "location"
             },
             {
-              "type": "strip_reminders"
+              "type": "strip",
+              "field": "reminder"
             }
           ]
         },
         {
-          "url": "https://example.com/holidays.ics"
+          "url": "https://example.com/holidays.ics",
+          "steps": []
         }
-      ]
+      ],
+      "steps": []
     },
     "personal": {
       "sources": [
         {
-          "url": "https://example.com/personal.ics"
+          "url": "https://example.com/personal.ics",
+          "steps": []
+        }
+      ],
+      "steps": [
+        {
+          "type": "replace",
+          "pattern": "^",
+          "replacement": "[PERSONAL] ",
+          "field": "summary"
         }
       ]
     }

@@ -1,8 +1,6 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use ical_merge::config::{
-    CalendarConfig, Config, FilterConfig, FilterRule, ModifierConfig, ServerConfig, SourceConfig,
-};
+use ical_merge::config::{CalendarConfig, Config, MatchMode, ServerConfig, SourceConfig, Step};
 use ical_merge::fetcher::Fetcher;
 use ical_merge::ical::parse_calendar;
 use ical_merge::merge::merge_calendars;
@@ -34,8 +32,7 @@ async fn test_full_flow_fetch_filter_modify_merge_serve() {
         .await;
 
     // Configure calendar with:
-    // - Filter: allow only meetings, deny optional
-    // - Modifier: prefix "Meeting:" with "[WORK]"
+    // - Steps: deny optional, allow meetings, replace "Meeting:" with "[WORK]"
     let mut calendars = HashMap::new();
     calendars.insert(
         "combined-work".to_string(),
@@ -43,28 +40,30 @@ async fn test_full_flow_fetch_filter_modify_merge_serve() {
             sources: vec![
                 SourceConfig {
                     url: format!("{}/work.ics", mock_server.uri()),
-                    filters: FilterConfig {
-                        allow: vec![FilterRule {
-                            pattern: "(?i)meeting".to_string(),
-                            fields: vec!["summary".to_string(), "description".to_string()],
-                        }],
-                        deny: vec![FilterRule {
-                            pattern: "(?i)optional".to_string(),
+                    steps: vec![
+                        Step::Deny {
+                            patterns: vec!["(?i)optional".to_string()],
+                            mode: MatchMode::Any,
                             fields: vec!["summary".to_string()],
-                        }],
-                    },
-                    modifiers: vec![ModifierConfig::Replace {
-                        pattern: "^Meeting:".to_string(),
-                        replacement: "[WORK]".to_string(),
-                        field: "summary".to_string(),
-                    }],
+                        },
+                        Step::Allow {
+                            patterns: vec!["(?i)meeting".to_string()],
+                            mode: MatchMode::Any,
+                            fields: vec!["summary".to_string(), "description".to_string()],
+                        },
+                        Step::Replace {
+                            pattern: "^Meeting:".to_string(),
+                            replacement: "[WORK]".to_string(),
+                            field: "summary".to_string(),
+                        },
+                    ],
                 },
                 SourceConfig {
                     url: format!("{}/holidays.ics", mock_server.uri()),
-                    filters: FilterConfig::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 },
             ],
+            steps: vec![],
         },
     );
 
@@ -137,19 +136,17 @@ async fn test_filter_behavior_end_to_end() {
         .mount(&mock_server)
         .await;
 
-    // Test 1: Only allow rules
+    // Test 1: Only allow step
     let config = CalendarConfig {
         sources: vec![SourceConfig {
             url: format!("{}/work.ics", mock_server.uri()),
-            filters: FilterConfig {
-                allow: vec![FilterRule {
-                    pattern: "(?i)meeting".to_string(),
-                    fields: vec!["summary".to_string(), "description".to_string()],
-                }],
-                deny: vec![],
-            },
-            modifiers: vec![],
+            steps: vec![Step::Allow {
+                patterns: vec!["(?i)meeting".to_string()],
+                mode: MatchMode::Any,
+                fields: vec!["summary".to_string(), "description".to_string()],
+            }],
         }],
+        steps: vec![],
     };
 
     let fetcher = Fetcher::new().unwrap();
@@ -160,19 +157,17 @@ async fn test_filter_behavior_end_to_end() {
     assert_eq!(result.events.len(), 2);
     assert_eq!(result.errors.len(), 0);
 
-    // Test 2: Only deny rules
+    // Test 2: Only deny step
     let config = CalendarConfig {
         sources: vec![SourceConfig {
             url: format!("{}/work.ics", mock_server.uri()),
-            filters: FilterConfig {
-                allow: vec![],
-                deny: vec![FilterRule {
-                    pattern: "(?i)optional".to_string(),
-                    fields: vec!["summary".to_string()],
-                }],
-            },
-            modifiers: vec![],
+            steps: vec![Step::Deny {
+                patterns: vec!["(?i)optional".to_string()],
+                mode: MatchMode::Any,
+                fields: vec!["summary".to_string()],
+            }],
         }],
+        steps: vec![],
     };
 
     let result = merge_calendars(&config, &fetcher).await.unwrap();
@@ -201,29 +196,29 @@ async fn test_multiple_sources_with_per_source_filters_and_modifiers() {
         sources: vec![
             SourceConfig {
                 url: format!("{}/work.ics", mock_server.uri()),
-                filters: FilterConfig {
-                    allow: vec![FilterRule {
-                        pattern: "(?i)meeting".to_string(),
+                steps: vec![
+                    Step::Allow {
+                        patterns: vec!["(?i)meeting".to_string()],
+                        mode: MatchMode::Any,
                         fields: vec!["summary".to_string()],
-                    }],
-                    deny: vec![],
-                },
-                modifiers: vec![ModifierConfig::Replace {
-                    pattern: "Meeting:".to_string(),
-                    replacement: "[WORK]".to_string(),
-                    field: "summary".to_string(),
-                }],
+                    },
+                    Step::Replace {
+                        pattern: "Meeting:".to_string(),
+                        replacement: "[WORK]".to_string(),
+                        field: "summary".to_string(),
+                    },
+                ],
             },
             SourceConfig {
                 url: format!("{}/personal.ics", mock_server.uri()),
-                filters: FilterConfig::default(),
-                modifiers: vec![ModifierConfig::Replace {
+                steps: vec![Step::Replace {
                     pattern: "^".to_string(),
                     replacement: "[PERSONAL] ".to_string(),
                     field: "summary".to_string(),
                 }],
             },
         ],
+        steps: vec![],
     };
 
     let fetcher = Fetcher::new().unwrap();
@@ -250,4 +245,135 @@ async fn test_multiple_sources_with_per_source_filters_and_modifiers() {
         personal_event.unwrap().summary(),
         Some("[PERSONAL] Dinner with friends")
     );
+}
+
+#[tokio::test]
+async fn test_calendar_level_steps() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/work.ics"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(WORK_CALENDAR))
+        .mount(&mock_server)
+        .await;
+
+    Mock::given(method("GET"))
+        .and(path("/personal.ics"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(PERSONAL_CALENDAR))
+        .mount(&mock_server)
+        .await;
+
+    // Both sources have no filtering, but calendar level applies a global prefix
+    let config = CalendarConfig {
+        sources: vec![
+            SourceConfig {
+                url: format!("{}/work.ics", mock_server.uri()),
+                steps: vec![],
+            },
+            SourceConfig {
+                url: format!("{}/personal.ics", mock_server.uri()),
+                steps: vec![],
+            },
+        ],
+        steps: vec![Step::Replace {
+            pattern: "^".to_string(),
+            replacement: "[MERGED] ".to_string(),
+            field: "summary".to_string(),
+        }],
+    };
+
+    let fetcher = Fetcher::new().unwrap();
+    let result = merge_calendars(&config, &fetcher).await.unwrap();
+
+    // All 5 events should have the prefix
+    assert_eq!(result.events.len(), 5);
+    for event in &result.events {
+        assert!(
+            event
+                .summary()
+                .map(|s| s.starts_with("[MERGED] "))
+                .unwrap_or(false)
+        );
+    }
+}
+
+#[tokio::test]
+async fn test_match_mode_all() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/work.ics"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(WORK_CALENDAR))
+        .mount(&mock_server)
+        .await;
+
+    // Allow only events that match ALL patterns
+    let config = CalendarConfig {
+        sources: vec![SourceConfig {
+            url: format!("{}/work.ics", mock_server.uri()),
+            steps: vec![Step::Allow {
+                patterns: vec!["(?i)meeting".to_string(), "(?i)team".to_string()],
+                mode: MatchMode::All,
+                fields: vec!["summary".to_string()],
+            }],
+        }],
+        steps: vec![],
+    };
+
+    let fetcher = Fetcher::new().unwrap();
+    let result = merge_calendars(&config, &fetcher).await.unwrap();
+
+    // Only "Meeting: Team standup" matches both "meeting" and "team"
+    assert_eq!(result.events.len(), 1);
+    assert!(
+        result.events[0]
+            .summary()
+            .map(|s| s.contains("Team standup"))
+            .unwrap_or(false)
+    );
+}
+
+#[tokio::test]
+async fn test_step_ordering_matters() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/work.ics"))
+        .respond_with(ResponseTemplate::new(200).set_body_string(WORK_CALENDAR))
+        .mount(&mock_server)
+        .await;
+
+    // Replace then allow - the allow step sees the replaced text
+    let config = CalendarConfig {
+        sources: vec![SourceConfig {
+            url: format!("{}/work.ics", mock_server.uri()),
+            steps: vec![
+                Step::Replace {
+                    pattern: "(?i)meeting".to_string(),
+                    replacement: "Event".to_string(),
+                    field: "summary".to_string(),
+                },
+                Step::Allow {
+                    patterns: vec!["Event".to_string()],
+                    mode: MatchMode::Any,
+                    fields: vec!["summary".to_string()],
+                },
+            ],
+        }],
+        steps: vec![],
+    };
+
+    let fetcher = Fetcher::new().unwrap();
+    let result = merge_calendars(&config, &fetcher).await.unwrap();
+
+    // Only events containing "meeting" (now "Event") should pass
+    assert_eq!(result.events.len(), 2);
+    for event in &result.events {
+        assert!(
+            event
+                .summary()
+                .map(|s| s.contains("Event"))
+                .unwrap_or(false)
+        );
+    }
 }

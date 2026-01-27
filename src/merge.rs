@@ -5,7 +5,7 @@ use futures::future::join_all;
 use crate::config::{CalendarConfig, SourceConfig};
 use crate::error::{Error, Result};
 use crate::fetcher::Fetcher;
-use crate::filter::{CompiledFilter, CompiledModifier};
+use crate::filter::{CompiledStep, process_events};
 use crate::ical::{Event, parse_calendar};
 
 /// Result of merging multiple calendar sources
@@ -83,8 +83,13 @@ pub async fn merge_calendars(config: &CalendarConfig, fetcher: &Fetcher) -> Resu
         }
     }
 
+    // Apply calendar-level steps
+    let calendar_steps = CompiledStep::compile_many(&config.steps)
+        .map_err(|e| Error::Config(format!("Failed to compile calendar-level steps: {}", e)))?;
+    let processed_events = process_events(all_events, &calendar_steps);
+
     // Deduplicate events by (start, end) time
-    let deduplicated_events = deduplicate_events(all_events);
+    let deduplicated_events = deduplicate_events(processed_events);
 
     Ok(MergeResult::new(deduplicated_events, errors))
 }
@@ -102,36 +107,20 @@ async fn fetch_and_process_source(
     // Parse calendar
     let calendar = parse_calendar(&ical_text).map_err(|e| (url.clone(), e))?;
 
-    // Compile filter
-    let filter = CompiledFilter::compile(&source.filters).map_err(|e| (url.clone(), e))?;
+    // Compile steps
+    let steps = CompiledStep::compile_many(&source.steps).map_err(|e| (url.clone(), e))?;
 
-    // Compile modifiers
-    let modifiers =
-        CompiledModifier::compile_many(&source.modifiers).map_err(|e| (url.clone(), e))?;
+    // Process events through steps
+    let events = calendar.into_events();
+    let processed_events = process_events(events, &steps);
 
-    // Filter events
-    let filtered_events: Vec<Event> = calendar
-        .into_events()
-        .into_iter()
-        .filter(|event| filter.should_include(event))
-        .collect();
-
-    // Apply modifiers
-    let mut modified_events = Vec::new();
-    for mut event in filtered_events {
-        for modifier in &modifiers {
-            modifier.apply(&mut event);
-        }
-        modified_events.push(event);
-    }
-
-    Ok(modified_events)
+    Ok(processed_events)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{FilterConfig, FilterRule, ModifierConfig, SourceConfig};
+    use crate::config::{MatchMode, SourceConfig, Step};
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -186,15 +175,14 @@ END:VCALENDAR"#;
             sources: vec![
                 SourceConfig {
                     url: format!("{}/cal1.ics", mock_server.uri()),
-                    filters: FilterConfig::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 },
                 SourceConfig {
                     url: format!("{}/cal2.ics", mock_server.uri()),
-                    filters: FilterConfig::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 },
             ],
+            steps: vec![],
         };
 
         let fetcher = Fetcher::new().unwrap();
@@ -217,15 +205,13 @@ END:VCALENDAR"#;
         let config = CalendarConfig {
             sources: vec![SourceConfig {
                 url: format!("{}/cal1.ics", mock_server.uri()),
-                filters: FilterConfig {
-                    allow: vec![FilterRule {
-                        pattern: "(?i)meeting".to_string(),
-                        fields: vec!["summary".to_string()],
-                    }],
-                    deny: vec![],
-                },
-                modifiers: vec![],
+                steps: vec![Step::Allow {
+                    patterns: vec!["(?i)meeting".to_string()],
+                    mode: MatchMode::Any,
+                    fields: vec!["summary".to_string()],
+                }],
             }],
+            steps: vec![],
         };
 
         let fetcher = Fetcher::new().unwrap();
@@ -250,19 +236,20 @@ END:VCALENDAR"#;
         let config = CalendarConfig {
             sources: vec![SourceConfig {
                 url: format!("{}/cal1.ics", mock_server.uri()),
-                filters: FilterConfig {
-                    allow: vec![FilterRule {
-                        pattern: "(?i)meeting".to_string(),
+                steps: vec![
+                    Step::Allow {
+                        patterns: vec!["(?i)meeting".to_string()],
+                        mode: MatchMode::Any,
                         fields: vec!["summary".to_string()],
-                    }],
-                    deny: vec![],
-                },
-                modifiers: vec![ModifierConfig::Replace {
-                    pattern: "^Meeting".to_string(),
-                    replacement: "[WORK]".to_string(),
-                    field: "summary".to_string(),
-                }],
+                    },
+                    Step::Replace {
+                        pattern: "^Meeting".to_string(),
+                        replacement: "[WORK]".to_string(),
+                        field: "summary".to_string(),
+                    },
+                ],
             }],
+            steps: vec![],
         };
 
         let fetcher = Fetcher::new().unwrap();
@@ -293,15 +280,14 @@ END:VCALENDAR"#;
             sources: vec![
                 SourceConfig {
                     url: format!("{}/cal1.ics", mock_server.uri()),
-                    filters: FilterConfig::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 },
                 SourceConfig {
                     url: format!("{}/notfound.ics", mock_server.uri()),
-                    filters: FilterConfig::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 },
             ],
+            steps: vec![],
         };
 
         let fetcher = Fetcher::new().unwrap();
@@ -373,15 +359,14 @@ END:VCALENDAR"#;
             sources: vec![
                 SourceConfig {
                     url: format!("{}/cal1.ics", mock_server.uri()),
-                    filters: FilterConfig::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 },
                 SourceConfig {
                     url: format!("{}/cal2.ics", mock_server.uri()),
-                    filters: FilterConfig::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 },
             ],
+            steps: vec![],
         };
 
         let fetcher = Fetcher::new().unwrap();

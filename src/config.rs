@@ -43,50 +43,66 @@ fn default_port() -> u16 {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct CalendarConfig {
     pub sources: Vec<SourceConfig>,
+    #[serde(default)]
+    pub steps: Vec<Step>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct SourceConfig {
     pub url: String,
     #[serde(default)]
-    pub filters: FilterConfig,
-    #[serde(default)]
-    pub modifiers: Vec<ModifierConfig>,
+    pub steps: Vec<Step>,
 }
 
+/// Match mode for allow/deny steps
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
-pub struct FilterConfig {
-    #[serde(default)]
-    pub allow: Vec<FilterRule>,
-    #[serde(default)]
-    pub deny: Vec<FilterRule>,
+#[serde(rename_all = "lowercase")]
+pub enum MatchMode {
+    #[default]
+    Any,
+    All,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct FilterRule {
-    pub pattern: String,
-    #[serde(default = "default_filter_fields")]
-    pub fields: Vec<String>,
-}
-
-fn default_filter_fields() -> Vec<String> {
+fn default_step_fields() -> Vec<String> {
     vec!["summary".to_string(), "description".to_string()]
 }
 
-fn default_modifier_field() -> String {
+fn default_step_field() -> String {
     "summary".to_string()
 }
 
+fn default_replacement() -> String {
+    String::new()
+}
+
+/// Processing step configuration
 #[derive(Debug, Clone, Deserialize, Serialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum ModifierConfig {
+#[serde(tag = "type", rename_all = "lowercase")]
+pub enum Step {
+    Allow {
+        patterns: Vec<String>,
+        #[serde(default)]
+        mode: MatchMode,
+        #[serde(default = "default_step_fields")]
+        fields: Vec<String>,
+    },
+    Deny {
+        patterns: Vec<String>,
+        #[serde(default)]
+        mode: MatchMode,
+        #[serde(default = "default_step_fields")]
+        fields: Vec<String>,
+    },
     Replace {
         pattern: String,
+        #[serde(default = "default_replacement")]
         replacement: String,
-        #[serde(default = "default_modifier_field")]
+        #[serde(default = "default_step_field")]
         field: String,
     },
-    StripReminders,
+    Strip {
+        field: String,
+    },
 }
 
 impl Config {
@@ -114,6 +130,55 @@ impl Config {
                         "Calendar '{}' source {} has empty URL",
                         id, idx
                     )));
+                }
+
+                // Validate source steps
+                Self::validate_steps(&source.steps, &format!("Calendar '{}' source {}", id, idx))?;
+            }
+
+            // Validate calendar-level steps
+            Self::validate_steps(&calendar.steps, &format!("Calendar '{}'", id))?;
+        }
+
+        Ok(())
+    }
+
+    fn validate_steps(steps: &[Step], context: &str) -> Result<()> {
+        use regex::Regex;
+
+        for (idx, step) in steps.iter().enumerate() {
+            match step {
+                Step::Allow { patterns, .. } | Step::Deny { patterns, .. } => {
+                    if patterns.is_empty() {
+                        return Err(Error::Config(format!(
+                            "{} step {} has no patterns",
+                            context, idx
+                        )));
+                    }
+                    for pattern in patterns {
+                        Regex::new(pattern).map_err(|e| {
+                            Error::Config(format!(
+                                "{} step {} has invalid pattern '{}': {}",
+                                context, idx, pattern, e
+                            ))
+                        })?;
+                    }
+                }
+                Step::Replace { pattern, .. } => {
+                    Regex::new(pattern).map_err(|e| {
+                        Error::Config(format!(
+                            "{} step {} has invalid pattern '{}': {}",
+                            context, idx, pattern, e
+                        ))
+                    })?;
+                }
+                Step::Strip { field } => {
+                    if field != "reminder" {
+                        return Err(Error::Config(format!(
+                            "{} step {} has unsupported strip field '{}' (only 'reminder' is supported)",
+                            context, idx, field
+                        )));
+                    }
                 }
             }
         }
@@ -184,18 +249,19 @@ mod tests {
     }
 
     #[test]
-    fn test_filter_fields_default() {
+    fn test_step_fields_default() {
         let config_json = r#"{
             "calendars": {
                 "test": {
                     "sources": [
                         {
                             "url": "https://example.com/test.ics",
-                            "filters": {
-                                "allow": [
-                                    { "pattern": "meeting" }
-                                ]
-                            }
+                            "steps": [
+                                {
+                                    "type": "allow",
+                                    "patterns": ["meeting"]
+                                }
+                            ]
                         }
                     ]
                 }
@@ -203,13 +269,20 @@ mod tests {
         }"#;
 
         let temp_dir = std::env::temp_dir();
-        let config_path = temp_dir.join("test_filter_defaults.json");
+        let config_path = temp_dir.join("test_step_defaults.json");
         fs::write(&config_path, config_json).unwrap();
 
         let config = Config::load(&config_path).unwrap();
         let source = &config.calendars["test"].sources[0];
-        let rule = &source.filters.allow[0];
-        assert_eq!(rule.fields, vec!["summary", "description"]);
+        if let Step::Allow { fields, mode, .. } = &source.steps[0] {
+            assert_eq!(
+                fields,
+                &vec!["summary".to_string(), "description".to_string()]
+            );
+            assert!(matches!(mode, MatchMode::Any));
+        } else {
+            panic!("Expected Allow step");
+        }
 
         fs::remove_file(config_path).unwrap();
     }
@@ -223,7 +296,13 @@ mod tests {
         assert!(config.validate().is_err());
 
         let mut calendars = HashMap::new();
-        calendars.insert("test".to_string(), CalendarConfig { sources: vec![] });
+        calendars.insert(
+            "test".to_string(),
+            CalendarConfig {
+                sources: vec![],
+                steps: vec![],
+            },
+        );
         let config = Config {
             server: ServerConfig::default(),
             calendars,
@@ -236,9 +315,9 @@ mod tests {
             CalendarConfig {
                 sources: vec![SourceConfig {
                     url: "https://example.com/test.ics".to_string(),
-                    filters: FilterConfig::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 }],
+                steps: vec![],
             },
         );
         let config = Config {
@@ -246,5 +325,135 @@ mod tests {
             calendars,
         };
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_replace_step_default_replacement() {
+        let config_json = r#"{
+            "calendars": {
+                "test": {
+                    "sources": [
+                        {
+                            "url": "https://example.com/test.ics",
+                            "steps": [
+                                {
+                                    "type": "replace",
+                                    "pattern": "🔔"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            }
+        }"#;
+
+        let temp_dir = std::env::temp_dir();
+        let config_path = temp_dir.join("test_replace_default.json");
+        fs::write(&config_path, config_json).unwrap();
+
+        let config = Config::load(&config_path).unwrap();
+        let source = &config.calendars["test"].sources[0];
+        if let Step::Replace {
+            pattern,
+            replacement,
+            field,
+        } = &source.steps[0]
+        {
+            assert_eq!(pattern, "🔔");
+            assert_eq!(replacement, ""); // Default empty string
+            assert_eq!(field, "summary"); // Default field
+        } else {
+            panic!("Expected Replace step");
+        }
+
+        fs::remove_file(config_path).unwrap();
+    }
+
+    #[test]
+    fn test_step_validation() {
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "test".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig {
+                    url: "https://example.com/test.ics".to_string(),
+                    steps: vec![Step::Allow {
+                        patterns: vec!["(?i)meeting".to_string()],
+                        mode: MatchMode::Any,
+                        fields: vec!["summary".to_string()],
+                    }],
+                }],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_ok());
+
+        // Test invalid regex
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "test".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig {
+                    url: "https://example.com/test.ics".to_string(),
+                    steps: vec![Step::Allow {
+                        patterns: vec!["[invalid".to_string()],
+                        mode: MatchMode::Any,
+                        fields: vec!["summary".to_string()],
+                    }],
+                }],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_err());
+
+        // Test empty patterns
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "test".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig {
+                    url: "https://example.com/test.ics".to_string(),
+                    steps: vec![Step::Allow {
+                        patterns: vec![],
+                        mode: MatchMode::Any,
+                        fields: vec!["summary".to_string()],
+                    }],
+                }],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_err());
+
+        // Test invalid strip field
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "test".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig {
+                    url: "https://example.com/test.ics".to_string(),
+                    steps: vec![Step::Strip {
+                        field: "invalid".to_string(),
+                    }],
+                }],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_err());
     }
 }

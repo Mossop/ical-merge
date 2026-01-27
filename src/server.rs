@@ -158,9 +158,9 @@ END:VCALENDAR"#;
             CalendarConfig {
                 sources: vec![SourceConfig {
                     url: format!("{}/test.ics", mock_server.uri()),
-                    filters: Default::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 }],
+                steps: vec![],
             },
         );
 
@@ -239,15 +239,14 @@ END:VCALENDAR"#;
                 sources: vec![
                     SourceConfig {
                         url: format!("{}/test.ics", mock_server.uri()),
-                        filters: Default::default(),
-                        modifiers: vec![],
+                        steps: vec![],
                     },
                     SourceConfig {
                         url: format!("{}/notfound.ics", mock_server.uri()),
-                        filters: Default::default(),
-                        modifiers: vec![],
+                        steps: vec![],
                     },
                 ],
+                steps: vec![],
             },
         );
 

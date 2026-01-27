@@ -111,9 +111,9 @@ mod tests {
             CalendarConfig {
                 sources: vec![SourceConfig {
                     url: "https://example.com/test1.ics".to_string(),
-                    filters: Default::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 }],
+                steps: vec![],
             },
         );
 
@@ -150,9 +150,9 @@ mod tests {
             CalendarConfig {
                 sources: vec![SourceConfig {
                     url: "https://example.com/test2.ics".to_string(),
-                    filters: Default::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 }],
+                steps: vec![],
             },
         );
 
@@ -217,9 +217,9 @@ mod tests {
             CalendarConfig {
                 sources: vec![SourceConfig {
                     url: "https://example.com/test1.ics".to_string(),
-                    filters: Default::default(),
-                    modifiers: vec![],
+                    steps: vec![],
                 }],
+                steps: vec![],
             },
         );
 
