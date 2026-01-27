@@ -285,11 +285,58 @@ fn create_event(summary: &str, description: Option<&str>) -> Event {
 4. Build: `cargo build --release`
 5. Test manually: `./target/release/ical-merge -c test-config.json`
 
+## Docker Deployment
+
+### Multi-Stage Dockerfile
+
+The Dockerfile uses two stages:
+1. **Builder** (rust:alpine): Compiles the Rust binary with musl for static linking
+2. **Runtime** (alpine:latest): Minimal image with just the binary and CA certs
+
+**Why alpine for runtime?**
+- Small size (~15MB total)
+- Has shell for debugging
+- CA certificates package available
+- Timezone data for proper time handling
+
+**Alternatives considered:**
+- `scratch`: Even smaller but no shell, harder to debug, no CA certs
+- `distroless`: Good middle ground but alpine is more familiar
+
+### Building
+
+```bash
+docker build -t ical-merge .
+```
+
+Build time optimizations:
+- Uses `--locked` to ensure reproducible builds
+- `.dockerignore` excludes target/ directory
+- Multi-stage keeps runtime image small
+
+### Running
+
+Key considerations:
+- Bind mount config.json for hot-reload to work
+- Mount as read-only (`:ro`) for security
+- Set `RUST_LOG` for logging level
+- Expose appropriate port
+- Non-root user (icalmerge:1000) for security
+
+### Config Hot-Reload in Docker
+
+The PollWatcher was specifically chosen because it works reliably with Docker bind mounts:
+- Filesystem events often don't propagate through bind mounts
+- Polling always works, regardless of host OS or mount type
+- 2 second interval is acceptable for config changes
+
 ## Quick Reference
 
 **Start server**: `cargo run -- -c config.json`
 **Run tests**: `mise run test`
 **Build release**: `cargo build --release`
+**Build Docker**: `docker build -t ical-merge .`
+**Run Docker**: `docker-compose up -d`
 **Fetch calendar**: `curl http://localhost:8080/ical/{id}`
 **Override port**: `cargo run -- --port 9090`
 **Debug logging**: `RUST_LOG=debug cargo run`

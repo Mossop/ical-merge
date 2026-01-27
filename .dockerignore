@@ -1,0 +1,35 @@
+# Build artifacts
+target/
+!Cargo.lock
+
+# Git
+.git/
+.gitignore
+.jj/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Claude
+.claude/
+
+# Documentation (keep README.md for context but exclude others)
+CLAUDE.md
+CLAUDE.local.md
+
+# CI/CD
+.github/
+
+# Test data
+tests/fixtures/
+
+# Misc
+.DS_Store
+*.log
+config.json
+config.example.json
+docker-compose.yml

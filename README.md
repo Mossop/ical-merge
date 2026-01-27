@@ -53,6 +53,8 @@ Create a `config.json` file:
 
 ## Usage
 
+### Local Development
+
 Run the server:
 
 ```bash
@@ -70,6 +72,31 @@ Access merged calendars:
 ```bash
 curl http://localhost:8080/ical/my-calendar
 ```
+
+### Docker
+
+**Using docker run:**
+
+```bash
+docker run -d \
+  --name ical-merge \
+  -p 8080:8080 \
+  -v $(pwd)/config.json:/app/config/config.json:ro \
+  -e RUST_LOG=ical_merge=info \
+  ical-merge
+```
+
+**Using docker-compose:**
+
+```bash
+docker-compose up -d
+```
+
+The docker-compose.yml is already configured to:
+- Mount your local config.json
+- Expose port 8080
+- Auto-restart on failure
+- Use PollWatcher for reliable config hot-reload with bind mounts
 
 ### Hot-Reload Configuration
 
@@ -105,6 +132,20 @@ cargo run
 
 This is useful for Docker deployments where you want to configure everything through environment variables.
 
+**Docker example:**
+
+```bash
+docker run -d \
+  --name ical-merge \
+  -p 9090:9090 \
+  -v $(pwd)/config.json:/etc/ical-merge/config.json:ro \
+  -e ICAL_MERGE_CONFIG=/etc/ical-merge/config.json \
+  -e ICAL_MERGE_BIND=0.0.0.0 \
+  -e ICAL_MERGE_PORT=9090 \
+  -e RUST_LOG=ical_merge=info \
+  ical-merge
+```
+
 ## Testing
 
 Run all tests:
@@ -118,6 +159,19 @@ Or with mise:
 ```bash
 mise run test
 ```
+
+## Docker Image Details
+
+The Docker image uses a multi-stage build:
+- **Builder**: rust:alpine with build dependencies
+- **Runtime**: alpine:latest (~10MB) with just the binary and CA certificates
+
+Benefits:
+- Minimal runtime image (~15MB total)
+- Non-root user for security
+- CA certificates for HTTPS requests
+- Timezone data included
+- Config hot-reload works with bind mounts
 
 ## License
 
