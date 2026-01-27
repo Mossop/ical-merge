@@ -23,6 +23,7 @@ impl CompiledFilterRule {
             let text = match field.as_str() {
                 "summary" => event.summary(),
                 "description" => event.description(),
+                "location" => event.location(),
                 _ => None,
             };
 
@@ -85,13 +86,29 @@ impl CompiledFilter {
 mod tests {
     use super::*;
     use crate::config::{FilterConfig, FilterRule};
-    use icalendar::Component;
+    use icalendar::{Component, EventLike};
 
     fn create_event(summary: &str, description: Option<&str>) -> Event {
         let mut event = icalendar::Event::new();
         event.summary(summary);
         if let Some(desc) = description {
             event.description(desc);
+        }
+        Event::new(event)
+    }
+
+    fn create_event_with_location(
+        summary: &str,
+        description: Option<&str>,
+        location: Option<&str>,
+    ) -> Event {
+        let mut event = icalendar::Event::new();
+        event.summary(summary);
+        if let Some(desc) = description {
+            event.description(desc);
+        }
+        if let Some(loc) = location {
+            event.location(loc);
         }
         Event::new(event)
     }
@@ -210,5 +227,111 @@ mod tests {
 
         let event = create_event("Any event", None);
         assert!(filter.should_include(&event));
+    }
+
+    #[test]
+    fn test_location_allow_filter() {
+        let config = FilterConfig {
+            allow: vec![FilterRule {
+                pattern: "(?i)stadium".to_string(),
+                fields: vec!["location".to_string()],
+            }],
+            deny: vec![],
+        };
+        let filter = CompiledFilter::compile(&config).unwrap();
+
+        let event1 = create_event_with_location("England vs Wales", None, Some("Allianz Stadium"));
+        assert!(filter.should_include(&event1));
+
+        let event2 = create_event_with_location(
+            "England vs Scotland",
+            None,
+            Some("Scottish Gas Murrayfield"),
+        );
+        assert!(!filter.should_include(&event2));
+
+        // Event with no location should not match
+        let event3 = create_event_with_location("Some Event", None, None);
+        assert!(!filter.should_include(&event3));
+    }
+
+    #[test]
+    fn test_location_deny_filter() {
+        let config = FilterConfig {
+            allow: vec![],
+            deny: vec![FilterRule {
+                pattern: "(?i)online".to_string(),
+                fields: vec!["location".to_string()],
+            }],
+        };
+        let filter = CompiledFilter::compile(&config).unwrap();
+
+        let event1 = create_event_with_location("Meeting", None, Some("Conference Room A"));
+        assert!(filter.should_include(&event1));
+
+        let event2 = create_event_with_location("Meeting", None, Some("Online Zoom"));
+        assert!(!filter.should_include(&event2));
+
+        // Event with no location should be included (doesn't match deny)
+        let event3 = create_event_with_location("Meeting", None, None);
+        assert!(filter.should_include(&event3));
+    }
+
+    #[test]
+    fn test_multi_field_with_location() {
+        let config = FilterConfig {
+            allow: vec![FilterRule {
+                pattern: "(?i)rugby".to_string(),
+                fields: vec![
+                    "summary".to_string(),
+                    "description".to_string(),
+                    "location".to_string(),
+                ],
+            }],
+            deny: vec![],
+        };
+        let filter = CompiledFilter::compile(&config).unwrap();
+
+        // Matches in summary
+        let event1 = create_event_with_location("Rugby Match", None, Some("Stadium"));
+        assert!(filter.should_include(&event1));
+
+        // Matches in description
+        let event2 =
+            create_event_with_location("Sports Event", Some("Watch rugby"), Some("Stadium"));
+        assert!(filter.should_include(&event2));
+
+        // Matches in location
+        let event3 =
+            create_event_with_location("Sports Event", None, Some("England Rugby Stadium"));
+        assert!(filter.should_include(&event3));
+
+        // No match in any field
+        let event4 = create_event_with_location("Football Match", None, Some("Stadium"));
+        assert!(!filter.should_include(&event4));
+    }
+
+    #[test]
+    fn test_england_rugby_fixture_location_filter() {
+        // Test with actual fixture data
+        let config = FilterConfig {
+            allow: vec![FilterRule {
+                pattern: "(?i)allianz|stadium".to_string(),
+                fields: vec!["location".to_string()],
+            }],
+            deny: vec![],
+        };
+        let filter = CompiledFilter::compile(&config).unwrap();
+
+        let event1 =
+            create_event_with_location("🏉 England vs Wales", None, Some("Allianz Stadium"));
+        assert!(filter.should_include(&event1));
+
+        let event2 = create_event_with_location(
+            "🏉 Scotland vs England",
+            None,
+            Some("Scottish Gas Murrayfield"),
+        );
+        assert!(!filter.should_include(&event2));
     }
 }

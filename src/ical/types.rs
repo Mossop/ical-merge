@@ -1,6 +1,6 @@
 use std::fmt;
 
-use icalendar::Component;
+use icalendar::{Component, EventLike};
 
 /// Wrapper around icalendar::Calendar
 #[derive(Debug)]
@@ -60,6 +60,10 @@ impl Event {
         self.inner.get_description()
     }
 
+    pub fn location(&self) -> Option<&str> {
+        self.inner.get_location()
+    }
+
     pub fn uid(&self) -> Option<&str> {
         // icalendar doesn't expose get_uid, so we need to get it from properties
         self.inner
@@ -91,12 +95,14 @@ mod tests {
         let mut event = icalendar::Event::new();
         event.summary("Test Event");
         event.description("Test Description");
+        event.location("Test Location");
         event.uid("test-uid-123");
 
         let event = Event::new(event);
 
         assert_eq!(event.summary(), Some("Test Event"));
         assert_eq!(event.description(), Some("Test Description"));
+        assert_eq!(event.location(), Some("Test Location"));
         assert_eq!(event.uid(), Some("test-uid-123"));
     }
 
