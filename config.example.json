@@ -23,8 +23,19 @@
           },
           "modifiers": [
             {
+              "type": "replace",
               "pattern": "^Meeting:",
-              "replacement": "[WORK] "
+              "replacement": "[WORK] ",
+              "field": "summary"
+            },
+            {
+              "type": "replace",
+              "pattern": "Building A",
+              "replacement": "Main Office",
+              "field": "location"
+            },
+            {
+              "type": "strip_reminders"
             }
           ]
         },

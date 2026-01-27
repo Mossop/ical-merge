@@ -1,6 +1,6 @@
 use figment::{
-    providers::{Env, Format, Json},
     Figment,
+    providers::{Env, Format, Json},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -73,10 +73,20 @@ fn default_filter_fields() -> Vec<String> {
     vec!["summary".to_string(), "description".to_string()]
 }
 
+fn default_modifier_field() -> String {
+    "summary".to_string()
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ModifierConfig {
-    pub pattern: String,
-    pub replacement: String,
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ModifierConfig {
+    Replace {
+        pattern: String,
+        replacement: String,
+        #[serde(default = "default_modifier_field")]
+        field: String,
+    },
+    StripReminders,
 }
 
 impl Config {

@@ -127,7 +127,9 @@ async fn run_show(config_path: PathBuf, calendar_id: String) -> Result<()> {
             .map(|dt| format_date_time(&dt))
             .unwrap_or_else(|| "<no end>".to_string());
 
-        println!("{} - {}: {}", start, end, summary);
+        let alarm_indicator = if event.has_alarms() { "⏰ " } else { "  " };
+
+        println!("{} - {}: {}{}", start, end, alarm_indicator, summary);
     }
 
     Ok(())

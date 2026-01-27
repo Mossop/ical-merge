@@ -6,7 +6,7 @@ use ical_merge::config::{
 use ical_merge::fetcher::Fetcher;
 use ical_merge::ical::parse_calendar;
 use ical_merge::merge::merge_calendars;
-use ical_merge::server::{create_router, AppState};
+use ical_merge::server::{AppState, create_router};
 use std::collections::HashMap;
 use tower::util::ServiceExt;
 use wiremock::matchers::{method, path};
@@ -53,9 +53,10 @@ async fn test_full_flow_fetch_filter_modify_merge_serve() {
                             fields: vec!["summary".to_string()],
                         }],
                     },
-                    modifiers: vec![ModifierConfig {
+                    modifiers: vec![ModifierConfig::Replace {
                         pattern: "^Meeting:".to_string(),
                         replacement: "[WORK]".to_string(),
+                        field: "summary".to_string(),
                     }],
                 },
                 SourceConfig {
@@ -207,17 +208,19 @@ async fn test_multiple_sources_with_per_source_filters_and_modifiers() {
                     }],
                     deny: vec![],
                 },
-                modifiers: vec![ModifierConfig {
+                modifiers: vec![ModifierConfig::Replace {
                     pattern: "Meeting:".to_string(),
                     replacement: "[WORK]".to_string(),
+                    field: "summary".to_string(),
                 }],
             },
             SourceConfig {
                 url: format!("{}/personal.ics", mock_server.uri()),
                 filters: FilterConfig::default(),
-                modifiers: vec![ModifierConfig {
+                modifiers: vec![ModifierConfig::Replace {
                     pattern: "^".to_string(),
                     replacement: "[PERSONAL] ".to_string(),
+                    field: "summary".to_string(),
                 }],
             },
         ],

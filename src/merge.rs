@@ -4,7 +4,7 @@ use crate::config::{CalendarConfig, SourceConfig};
 use crate::error::{Error, Result};
 use crate::fetcher::Fetcher;
 use crate::filter::{CompiledFilter, CompiledModifier};
-use crate::ical::{parse_calendar, Event};
+use crate::ical::{Event, parse_calendar};
 
 /// Result of merging multiple calendar sources
 #[derive(Debug)]
@@ -210,9 +210,10 @@ END:VCALENDAR"#;
                     }],
                     deny: vec![],
                 },
-                modifiers: vec![ModifierConfig {
+                modifiers: vec![ModifierConfig::Replace {
                     pattern: "^Meeting".to_string(),
                     replacement: "[WORK]".to_string(),
+                    field: "summary".to_string(),
                 }],
             }],
         };
