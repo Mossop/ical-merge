@@ -17,6 +17,9 @@ pub enum Error {
 
     #[error("File watcher error: {0}")]
     Notify(#[from] notify::Error),
+
+    #[error("Calendar not found: {0}")]
+    CalendarNotFound(String),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -72,6 +72,14 @@ impl Event {
     pub fn set_summary(&mut self, summary: &str) {
         self.inner.summary(summary);
     }
+
+    pub fn start(&self) -> Option<icalendar::DatePerhapsTime> {
+        self.inner.get_start()
+    }
+
+    pub fn end(&self) -> Option<icalendar::DatePerhapsTime> {
+        self.inner.get_end()
+    }
 }
 
 #[cfg(test)]
