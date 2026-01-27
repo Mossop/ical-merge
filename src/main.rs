@@ -84,9 +84,14 @@ async fn main() -> Result<()> {
         None => find_config_file()?,
     };
 
-    match cli.command.unwrap_or(Command::Serve {
-        bind: None,
-        port: None,
+    match cli.command.unwrap_or_else(|| {
+        // When no command is specified, default to Serve and check environment variables
+        Command::Serve {
+            bind: std::env::var("ICAL_MERGE_BIND").ok(),
+            port: std::env::var("ICAL_MERGE_PORT")
+                .ok()
+                .and_then(|s| s.parse().ok()),
+        }
     }) {
         Command::Serve { bind, port } => run_serve(config_path, bind, port).await,
         Command::Show { calendar_id } => run_show(config_path, calendar_id).await,
@@ -95,17 +100,13 @@ async fn main() -> Result<()> {
 }
 
 async fn run_serve(config_path: PathBuf, bind: Option<String>, port: Option<u16>) -> Result<()> {
-    let mut config = Config::load(&config_path)?;
+    let config = Config::load(&config_path)?;
     config.validate()?;
 
-    if let Some(bind) = bind {
-        config.server.bind_address = bind;
-    }
-    if let Some(port) = port {
-        config.server.port = port;
-    }
+    let bind_address = bind.unwrap_or_else(|| "127.0.0.1".to_string());
+    let port = port.unwrap_or(8080);
 
-    let bind_addr = format!("{}:{}", config.server.bind_address, config.server.port);
+    let bind_addr = format!("{}:{}", bind_address, port);
 
     tracing::info!("Starting server on {}", bind_addr);
     tracing::info!(

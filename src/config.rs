@@ -1,6 +1,6 @@
 use figment::{
     Figment,
-    providers::{Env, Format, Json, Toml},
+    providers::{Format, Json, Toml},
 };
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -10,34 +10,7 @@ use crate::error::{Error, Result};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Config {
-    #[serde(default)]
-    pub server: ServerConfig,
     pub calendars: HashMap<String, CalendarConfig>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct ServerConfig {
-    #[serde(default = "default_bind_address")]
-    pub bind_address: String,
-    #[serde(default = "default_port")]
-    pub port: u16,
-}
-
-impl Default for ServerConfig {
-    fn default() -> Self {
-        Self {
-            bind_address: default_bind_address(),
-            port: default_port(),
-        }
-    }
-}
-
-fn default_bind_address() -> String {
-    "127.0.0.1".to_string()
-}
-
-fn default_port() -> u16 {
-    8080
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -157,10 +130,7 @@ impl Config {
             _ => figment.merge(Json::file(path)),
         };
 
-        figment
-            .merge(Env::prefixed("ICAL_MERGE_"))
-            .extract()
-            .map_err(|e| Error::Config(e.to_string()))
+        figment.extract().map_err(|e| Error::Config(e.to_string()))
     }
 
     pub fn validate(&self) -> Result<()> {
@@ -315,10 +285,6 @@ mod tests {
     #[test]
     fn test_config_parsing() {
         let config_json = r#"{
-            "server": {
-                "bind_address": "0.0.0.0",
-                "port": 9090
-            },
             "calendars": {
                 "test": {
                     "sources": [
@@ -335,8 +301,6 @@ mod tests {
         fs::write(&config_path, config_json).unwrap();
 
         let config = Config::load(&config_path).unwrap();
-        assert_eq!(config.server.bind_address, "0.0.0.0");
-        assert_eq!(config.server.port, 9090);
         assert_eq!(config.calendars.len(), 1);
         assert!(config.calendars.contains_key("test"));
 
@@ -344,7 +308,7 @@ mod tests {
     }
 
     #[test]
-    fn test_config_defaults() {
+    fn test_config_minimal() {
         let config_json = r#"{
             "calendars": {
                 "test": {
@@ -358,12 +322,12 @@ mod tests {
         }"#;
 
         let temp_dir = std::env::temp_dir();
-        let config_path = temp_dir.join("test_config_defaults.json");
+        let config_path = temp_dir.join("test_config_minimal.json");
         fs::write(&config_path, config_json).unwrap();
 
         let config = Config::load(&config_path).unwrap();
-        assert_eq!(config.server.bind_address, "127.0.0.1");
-        assert_eq!(config.server.port, 8080);
+        assert_eq!(config.calendars.len(), 1);
+        assert!(config.calendars.contains_key("test"));
 
         fs::remove_file(config_path).unwrap();
     }
@@ -411,7 +375,6 @@ mod tests {
     #[test]
     fn test_config_validation() {
         let config = Config {
-            server: ServerConfig::default(),
             calendars: HashMap::new(),
         };
         assert!(config.validate().is_err());
@@ -424,10 +387,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_err());
 
         let mut calendars = HashMap::new();
@@ -441,10 +401,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_ok());
     }
 
@@ -508,10 +465,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_ok());
 
         // Test invalid regex
@@ -530,10 +484,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_err());
 
         // Test empty patterns
@@ -552,10 +503,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_err());
 
         // Test invalid strip field
@@ -572,10 +520,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_err());
     }
 
@@ -603,10 +548,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_ok());
 
         // Unknown calendar reference
@@ -621,10 +563,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_err());
     }
 
@@ -642,10 +581,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_err());
     }
 
@@ -673,10 +609,7 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_err());
     }
 
@@ -730,20 +663,13 @@ mod tests {
                 steps: vec![],
             },
         );
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
         assert!(config.validate().is_ok());
     }
 
     #[test]
     fn test_config_parsing_toml() {
         let config_toml = r#"
-[server]
-bind_address = "0.0.0.0"
-port = 9090
-
 [calendars.test]
 
 [[calendars.test.sources]]
@@ -758,8 +684,6 @@ calendars.test.steps = []
         fs::write(&config_path, config_toml).unwrap();
 
         let config = Config::load(&config_path).unwrap();
-        assert_eq!(config.server.bind_address, "0.0.0.0");
-        assert_eq!(config.server.port, 9090);
         assert_eq!(config.calendars.len(), 1);
         assert!(config.calendars.contains_key("test"));
 

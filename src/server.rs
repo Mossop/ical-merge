@@ -122,7 +122,7 @@ impl IntoResponse for AppError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{CalendarConfig, ServerConfig, SourceConfig};
+    use crate::config::{CalendarConfig, SourceConfig};
     use axum::body::Body;
     use axum::http::{Request, StatusCode};
     use std::collections::HashMap;
@@ -164,10 +164,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let config_path = std::env::temp_dir().join("test-config.json");
@@ -197,7 +194,6 @@ END:VCALENDAR"#;
     #[tokio::test]
     async fn test_unknown_calendar_returns_404() {
         let config = Config {
-            server: ServerConfig::default(),
             calendars: HashMap::new(),
         };
 
@@ -250,10 +246,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let config_path = std::env::temp_dir().join("test-config.json");

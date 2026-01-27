@@ -85,7 +85,7 @@ fn start_config_watcher_with_interval(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{CalendarConfig, Config, ServerConfig, SourceConfig};
+    use crate::config::{CalendarConfig, Config, SourceConfig};
     use crate::fetcher::Fetcher;
     use std::collections::HashMap;
     use std::fs;
@@ -118,7 +118,6 @@ mod tests {
         );
 
         let config = Config {
-            server: ServerConfig::default(),
             calendars: calendars.clone(),
         };
 
@@ -157,7 +156,6 @@ mod tests {
         );
 
         let new_config = Config {
-            server: ServerConfig::default(),
             calendars: calendars.clone(),
         };
 
@@ -224,7 +222,6 @@ mod tests {
         );
 
         let config = Config {
-            server: ServerConfig::default(),
             calendars: calendars.clone(),
         };
 

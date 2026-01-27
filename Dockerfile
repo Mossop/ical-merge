@@ -32,7 +32,7 @@ RUN addgroup -g 1000 icalmerge && \
 RUN mkdir -p /app/config && \
     chown -R icalmerge:icalmerge /app
 
-WORKDIR /app
+WORKDIR /app/config
 
 # Copy binary from builder
 COPY --from=builder /app/target/release/ical-merge /usr/local/bin/ical-merge
@@ -43,8 +43,10 @@ USER icalmerge
 # Expose default port
 EXPOSE 8080
 
-# Set default environment variables
-ENV ICAL_MERGE_CONFIG=/app/config/config.json
+# Set default environment variables for Docker deployment
+# Bind to all interfaces in container (can be overridden)
+ENV ICAL_MERGE_BIND=0.0.0.0 \
+    ICAL_MERGE_PORT=8080
 
-# Run the binary
+# Run the binary (defaults to serve command, reads environment variables)
 ENTRYPOINT ["/usr/local/bin/ical-merge"]

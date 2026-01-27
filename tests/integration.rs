@@ -1,6 +1,6 @@
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
-use ical_merge::config::{CalendarConfig, Config, MatchMode, ServerConfig, SourceConfig, Step};
+use ical_merge::config::{CalendarConfig, Config, MatchMode, SourceConfig, Step};
 use ical_merge::fetcher::Fetcher;
 use ical_merge::ical::parse_calendar;
 use ical_merge::merge::merge_calendars;
@@ -67,10 +67,7 @@ async fn test_full_flow_fetch_filter_modify_merge_serve() {
         },
     );
 
-    let config = Config {
-        server: ServerConfig::default(),
-        calendars,
-    };
+    let config = Config { calendars };
 
     let fetcher = Fetcher::new().unwrap();
     let config_path = std::env::temp_dir().join("test-integration-config.json");
@@ -153,10 +150,7 @@ async fn test_filter_behavior_end_to_end() {
         },
     );
 
-    let config = Config {
-        server: ServerConfig::default(),
-        calendars,
-    };
+    let config = Config { calendars };
 
     let fetcher = Fetcher::new().unwrap();
     let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -183,10 +177,7 @@ async fn test_filter_behavior_end_to_end() {
         },
     );
 
-    let config = Config {
-        server: ServerConfig::default(),
-        calendars,
-    };
+    let config = Config { calendars };
 
     let result = merge_calendars("test", &config, &fetcher).await.unwrap();
 
@@ -243,10 +234,7 @@ async fn test_multiple_sources_with_per_source_filters_and_modifiers() {
         },
     );
 
-    let config = Config {
-        server: ServerConfig::default(),
-        calendars,
-    };
+    let config = Config { calendars };
 
     let fetcher = Fetcher::new().unwrap();
     let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -313,10 +301,7 @@ async fn test_calendar_level_steps() {
         },
     );
 
-    let config = Config {
-        server: ServerConfig::default(),
-        calendars,
-    };
+    let config = Config { calendars };
 
     let fetcher = Fetcher::new().unwrap();
     let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -360,10 +345,7 @@ async fn test_match_mode_all() {
         },
     );
 
-    let config = Config {
-        server: ServerConfig::default(),
-        calendars,
-    };
+    let config = Config { calendars };
 
     let fetcher = Fetcher::new().unwrap();
     let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -412,10 +394,7 @@ async fn test_step_ordering_matters() {
         },
     );
 
-    let config = Config {
-        server: ServerConfig::default(),
-        calendars,
-    };
+    let config = Config { calendars };
 
     let fetcher = Fetcher::new().unwrap();
     let result = merge_calendars("test", &config, &fetcher).await.unwrap();

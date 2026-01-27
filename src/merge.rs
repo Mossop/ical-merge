@@ -166,7 +166,7 @@ async fn resolve_calendar_reference(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{CalendarConfig, MatchMode, ServerConfig, SourceConfig, Step};
+    use crate::config::{CalendarConfig, MatchMode, SourceConfig, Step};
     use std::collections::HashMap;
     use wiremock::matchers::{method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
@@ -236,10 +236,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -274,10 +271,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -321,10 +315,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -368,10 +359,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -456,10 +444,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("test", &config, &fetcher).await.unwrap();
@@ -535,10 +520,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("derived", &config, &fetcher).await.unwrap();
@@ -584,10 +566,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("derived", &config, &fetcher).await.unwrap();
@@ -643,10 +622,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("combined", &config, &fetcher)
@@ -700,10 +676,7 @@ END:VCALENDAR"#;
             },
         );
 
-        let config = Config {
-            server: ServerConfig::default(),
-            calendars,
-        };
+        let config = Config { calendars };
 
         let fetcher = Fetcher::new().unwrap();
         let result = merge_calendars("level3", &config, &fetcher).await.unwrap();
