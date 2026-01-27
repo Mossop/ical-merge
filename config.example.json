@@ -65,6 +65,30 @@
           "field": "summary"
         }
       ]
+    },
+    "everything": {
+      "comment": "Calendar references allow using other calendars as sources",
+      "sources": [
+        {
+          "calendar": "combined-work",
+          "comment": "References the 'combined-work' calendar defined above",
+          "steps": [
+            {
+              "type": "replace",
+              "pattern": "^",
+              "replacement": "[WORK] ",
+              "field": "summary",
+              "comment": "Source-level steps are applied to the referenced calendar's events"
+            }
+          ]
+        },
+        {
+          "calendar": "personal",
+          "comment": "References can be mixed with URL sources in the same calendar",
+          "steps": []
+        }
+      ],
+      "steps": []
     }
   }
 }

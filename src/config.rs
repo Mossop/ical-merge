@@ -48,10 +48,36 @@ pub struct CalendarConfig {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct SourceConfig {
-    pub url: String,
-    #[serde(default)]
-    pub steps: Vec<Step>,
+#[serde(untagged)]
+pub enum SourceConfig {
+    Url {
+        url: String,
+        #[serde(default)]
+        steps: Vec<Step>,
+    },
+    Calendar {
+        calendar: String,
+        #[serde(default)]
+        steps: Vec<Step>,
+    },
+}
+
+impl SourceConfig {
+    /// Get the steps for this source
+    pub fn steps(&self) -> &[Step] {
+        match self {
+            SourceConfig::Url { steps, .. } => steps,
+            SourceConfig::Calendar { steps, .. } => steps,
+        }
+    }
+
+    /// Get an identifier for this source (URL or calendar reference)
+    pub fn identifier(&self) -> String {
+        match self {
+            SourceConfig::Url { url, .. } => url.clone(),
+            SourceConfig::Calendar { calendar, .. } => format!("calendar:{}", calendar),
+        }
+    }
 }
 
 /// Match mode for allow/deny steps
@@ -125,21 +151,89 @@ impl Config {
             }
 
             for (idx, source) in calendar.sources.iter().enumerate() {
-                if source.url.is_empty() {
-                    return Err(Error::Config(format!(
-                        "Calendar '{}' source {} has empty URL",
-                        id, idx
-                    )));
+                match source {
+                    SourceConfig::Url { url, steps } => {
+                        if url.is_empty() {
+                            return Err(Error::Config(format!(
+                                "Calendar '{}' source {} has empty URL",
+                                id, idx
+                            )));
+                        }
+                        // Validate source steps
+                        Self::validate_steps(steps, &format!("Calendar '{}' source {}", id, idx))?;
+                    }
+                    SourceConfig::Calendar {
+                        calendar: ref_id,
+                        steps,
+                    } => {
+                        if ref_id.is_empty() {
+                            return Err(Error::Config(format!(
+                                "Calendar '{}' source {} has empty calendar reference",
+                                id, idx
+                            )));
+                        }
+                        // Check that referenced calendar exists
+                        if !self.calendars.contains_key(ref_id) {
+                            return Err(Error::Config(format!(
+                                "Calendar '{}' source {} references unknown calendar '{}'",
+                                id, idx, ref_id
+                            )));
+                        }
+                        // Validate source steps
+                        Self::validate_steps(steps, &format!("Calendar '{}' source {}", id, idx))?;
+                    }
                 }
-
-                // Validate source steps
-                Self::validate_steps(&source.steps, &format!("Calendar '{}' source {}", id, idx))?;
             }
 
             // Validate calendar-level steps
             Self::validate_steps(&calendar.steps, &format!("Calendar '{}'", id))?;
         }
 
+        // Detect cycles in calendar references
+        for id in self.calendars.keys() {
+            self.detect_cycle(
+                id,
+                &mut std::collections::HashSet::new(),
+                &mut std::collections::HashSet::new(),
+            )?;
+        }
+
+        Ok(())
+    }
+
+    /// Detect cycles in calendar references using DFS
+    fn detect_cycle(
+        &self,
+        calendar_id: &str,
+        visited: &mut std::collections::HashSet<String>,
+        stack: &mut std::collections::HashSet<String>,
+    ) -> Result<()> {
+        if stack.contains(calendar_id) {
+            return Err(Error::Config(format!(
+                "Circular calendar reference detected involving '{}'",
+                calendar_id
+            )));
+        }
+
+        if visited.contains(calendar_id) {
+            return Ok(());
+        }
+
+        visited.insert(calendar_id.to_string());
+        stack.insert(calendar_id.to_string());
+
+        if let Some(calendar) = self.calendars.get(calendar_id) {
+            for source in &calendar.sources {
+                if let SourceConfig::Calendar {
+                    calendar: ref_id, ..
+                } = source
+                {
+                    self.detect_cycle(ref_id, visited, stack)?;
+                }
+            }
+        }
+
+        stack.remove(calendar_id);
         Ok(())
     }
 
@@ -274,7 +368,8 @@ mod tests {
 
         let config = Config::load(&config_path).unwrap();
         let source = &config.calendars["test"].sources[0];
-        if let Step::Allow { fields, mode, .. } = &source.steps[0] {
+        let steps = source.steps();
+        if let Step::Allow { fields, mode, .. } = &steps[0] {
             assert_eq!(
                 fields,
                 &vec!["summary".to_string(), "description".to_string()]
@@ -313,7 +408,7 @@ mod tests {
         calendars.insert(
             "test".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: "https://example.com/test.ics".to_string(),
                     steps: vec![],
                 }],
@@ -353,11 +448,12 @@ mod tests {
 
         let config = Config::load(&config_path).unwrap();
         let source = &config.calendars["test"].sources[0];
+        let steps = source.steps();
         if let Step::Replace {
             pattern,
             replacement,
             field,
-        } = &source.steps[0]
+        } = &steps[0]
         {
             assert_eq!(pattern, "🔔");
             assert_eq!(replacement, ""); // Default empty string
@@ -375,7 +471,7 @@ mod tests {
         calendars.insert(
             "test".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: "https://example.com/test.ics".to_string(),
                     steps: vec![Step::Allow {
                         patterns: vec!["(?i)meeting".to_string()],
@@ -397,7 +493,7 @@ mod tests {
         calendars.insert(
             "test".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: "https://example.com/test.ics".to_string(),
                     steps: vec![Step::Allow {
                         patterns: vec!["[invalid".to_string()],
@@ -419,7 +515,7 @@ mod tests {
         calendars.insert(
             "test".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: "https://example.com/test.ics".to_string(),
                     steps: vec![Step::Allow {
                         patterns: vec![],
@@ -441,7 +537,7 @@ mod tests {
         calendars.insert(
             "test".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: "https://example.com/test.ics".to_string(),
                     steps: vec![Step::Strip {
                         field: "invalid".to_string(),
@@ -455,5 +551,163 @@ mod tests {
             calendars,
         };
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_calendar_reference_validation() {
+        // Valid calendar reference
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "base".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Url {
+                    url: "https://example.com/base.ics".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        calendars.insert(
+            "derived".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Calendar {
+                    calendar: "base".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_ok());
+
+        // Unknown calendar reference
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "derived".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Calendar {
+                    calendar: "nonexistent".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_cycle_detection_direct() {
+        // Direct self-reference A→A
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "a".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Calendar {
+                    calendar: "a".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_cycle_detection_indirect() {
+        // Indirect cycle A→B→A
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "a".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Calendar {
+                    calendar: "b".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        calendars.insert(
+            "b".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Calendar {
+                    calendar: "a".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_diamond_dependency() {
+        // Diamond dependency A→B, A→C, B→D, C→D (valid)
+        let mut calendars = HashMap::new();
+        calendars.insert(
+            "d".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Url {
+                    url: "https://example.com/d.ics".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        calendars.insert(
+            "b".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Calendar {
+                    calendar: "d".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        calendars.insert(
+            "c".to_string(),
+            CalendarConfig {
+                sources: vec![SourceConfig::Calendar {
+                    calendar: "d".to_string(),
+                    steps: vec![],
+                }],
+                steps: vec![],
+            },
+        );
+        calendars.insert(
+            "a".to_string(),
+            CalendarConfig {
+                sources: vec![
+                    SourceConfig::Calendar {
+                        calendar: "b".to_string(),
+                        steps: vec![],
+                    },
+                    SourceConfig::Calendar {
+                        calendar: "c".to_string(),
+                        steps: vec![],
+                    },
+                ],
+                steps: vec![],
+            },
+        );
+        let config = Config {
+            server: ServerConfig::default(),
+            calendars,
+        };
+        assert!(config.validate().is_ok());
     }
 }

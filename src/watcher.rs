@@ -109,7 +109,7 @@ mod tests {
         calendars.insert(
             "cal1".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: "https://example.com/test1.ics".to_string(),
                     steps: vec![],
                 }],
@@ -148,7 +148,7 @@ mod tests {
         calendars.insert(
             "cal2".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: "https://example.com/test2.ics".to_string(),
                     steps: vec![],
                 }],
@@ -215,7 +215,7 @@ mod tests {
         calendars.insert(
             "cal1".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: "https://example.com/test1.ics".to_string(),
                     steps: vec![],
                 }],

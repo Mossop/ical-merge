@@ -104,13 +104,15 @@ async fn run_show(config_path: PathBuf, calendar_id: String) -> Result<()> {
     let config = Config::load(&config_path)?;
     config.validate()?;
 
-    let calendar_config = config
-        .calendars
-        .get(&calendar_id)
-        .ok_or_else(|| ical_merge::error::Error::CalendarNotFound(calendar_id.clone()))?;
+    // Verify calendar exists
+    if !config.calendars.contains_key(&calendar_id) {
+        return Err(ical_merge::error::Error::CalendarNotFound(
+            calendar_id.clone(),
+        ));
+    }
 
     let fetcher = Fetcher::new()?;
-    let result = merge_calendars(calendar_config, &fetcher).await?;
+    let result = merge_calendars(&calendar_id, &config, &fetcher).await?;
 
     // Report any errors
     for (url, error) in &result.errors {
@@ -201,13 +203,15 @@ async fn run_ical(config_path: PathBuf, calendar_id: String) -> Result<()> {
     let config = Config::load(&config_path)?;
     config.validate()?;
 
-    let calendar_config = config
-        .calendars
-        .get(&calendar_id)
-        .ok_or_else(|| ical_merge::error::Error::CalendarNotFound(calendar_id.clone()))?;
+    // Verify calendar exists
+    if !config.calendars.contains_key(&calendar_id) {
+        return Err(ical_merge::error::Error::CalendarNotFound(
+            calendar_id.clone(),
+        ));
+    }
 
     let fetcher = Fetcher::new()?;
-    let result = merge_calendars(calendar_config, &fetcher).await?;
+    let result = merge_calendars(&calendar_id, &config, &fetcher).await?;
 
     // Report any errors to stderr
     for (url, error) in &result.errors {

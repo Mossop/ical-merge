@@ -60,18 +60,18 @@ async fn get_calendar(
     Path(id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Response, AppError> {
-    // Acquire read lock and clone the calendar config we need
-    let calendar_config = {
-        let config = state.config.read().unwrap();
-        config
-            .calendars
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| AppError::NotFound(format!("Calendar '{}' not found", id)))?
+    // Acquire read lock and clone the full config
+    let config = {
+        let config_guard = state.config.read().unwrap();
+        // Verify calendar exists
+        if !config_guard.calendars.contains_key(&id) {
+            return Err(AppError::NotFound(format!("Calendar '{}' not found", id)));
+        }
+        config_guard.clone()
     };
 
     // Merge calendars (lock is released here)
-    let merge_result = merge_calendars(&calendar_config, &state.fetcher).await?;
+    let merge_result = merge_calendars(&id, &config, &state.fetcher).await?;
 
     // Log any errors but still serve partial data
     for (url, err) in &merge_result.errors {
@@ -156,7 +156,7 @@ END:VCALENDAR"#;
         calendars.insert(
             "test-calendar".to_string(),
             CalendarConfig {
-                sources: vec![SourceConfig {
+                sources: vec![SourceConfig::Url {
                     url: format!("{}/test.ics", mock_server.uri()),
                     steps: vec![],
                 }],
@@ -237,11 +237,11 @@ END:VCALENDAR"#;
             "test-calendar".to_string(),
             CalendarConfig {
                 sources: vec![
-                    SourceConfig {
+                    SourceConfig::Url {
                         url: format!("{}/test.ics", mock_server.uri()),
                         steps: vec![],
                     },
-                    SourceConfig {
+                    SourceConfig::Url {
                         url: format!("{}/notfound.ics", mock_server.uri()),
                         steps: vec![],
                     },

@@ -38,7 +38,7 @@ async fn test_full_flow_fetch_filter_modify_merge_serve() {
         "combined-work".to_string(),
         CalendarConfig {
             sources: vec![
-                SourceConfig {
+                SourceConfig::Url {
                     url: format!("{}/work.ics", mock_server.uri()),
                     steps: vec![
                         Step::Deny {
@@ -58,7 +58,7 @@ async fn test_full_flow_fetch_filter_modify_merge_serve() {
                         },
                     ],
                 },
-                SourceConfig {
+                SourceConfig::Url {
                     url: format!("{}/holidays.ics", mock_server.uri()),
                     steps: vec![],
                 },
@@ -137,20 +137,29 @@ async fn test_filter_behavior_end_to_end() {
         .await;
 
     // Test 1: Only allow step
-    let config = CalendarConfig {
-        sources: vec![SourceConfig {
-            url: format!("{}/work.ics", mock_server.uri()),
-            steps: vec![Step::Allow {
-                patterns: vec!["(?i)meeting".to_string()],
-                mode: MatchMode::Any,
-                fields: vec!["summary".to_string(), "description".to_string()],
+    let mut calendars = HashMap::new();
+    calendars.insert(
+        "test".to_string(),
+        CalendarConfig {
+            sources: vec![SourceConfig::Url {
+                url: format!("{}/work.ics", mock_server.uri()),
+                steps: vec![Step::Allow {
+                    patterns: vec!["(?i)meeting".to_string()],
+                    mode: MatchMode::Any,
+                    fields: vec!["summary".to_string(), "description".to_string()],
+                }],
             }],
-        }],
-        steps: vec![],
+            steps: vec![],
+        },
+    );
+
+    let config = Config {
+        server: ServerConfig::default(),
+        calendars,
     };
 
     let fetcher = Fetcher::new().unwrap();
-    let result = merge_calendars(&config, &fetcher).await.unwrap();
+    let result = merge_calendars("test", &config, &fetcher).await.unwrap();
 
     // Should have 2 events that contain "meeting" (Team standup and Project review)
     // "Optional: Lunch and learn" doesn't contain "meeting"
@@ -158,19 +167,28 @@ async fn test_filter_behavior_end_to_end() {
     assert_eq!(result.errors.len(), 0);
 
     // Test 2: Only deny step
-    let config = CalendarConfig {
-        sources: vec![SourceConfig {
-            url: format!("{}/work.ics", mock_server.uri()),
-            steps: vec![Step::Deny {
-                patterns: vec!["(?i)optional".to_string()],
-                mode: MatchMode::Any,
-                fields: vec!["summary".to_string()],
+    let mut calendars = HashMap::new();
+    calendars.insert(
+        "test".to_string(),
+        CalendarConfig {
+            sources: vec![SourceConfig::Url {
+                url: format!("{}/work.ics", mock_server.uri()),
+                steps: vec![Step::Deny {
+                    patterns: vec!["(?i)optional".to_string()],
+                    mode: MatchMode::Any,
+                    fields: vec!["summary".to_string()],
+                }],
             }],
-        }],
-        steps: vec![],
+            steps: vec![],
+        },
+    );
+
+    let config = Config {
+        server: ServerConfig::default(),
+        calendars,
     };
 
-    let result = merge_calendars(&config, &fetcher).await.unwrap();
+    let result = merge_calendars("test", &config, &fetcher).await.unwrap();
 
     // Should have 2 events (3 total - 1 optional)
     assert_eq!(result.events.len(), 2);
@@ -192,37 +210,46 @@ async fn test_multiple_sources_with_per_source_filters_and_modifiers() {
         .mount(&mock_server)
         .await;
 
-    let config = CalendarConfig {
-        sources: vec![
-            SourceConfig {
-                url: format!("{}/work.ics", mock_server.uri()),
-                steps: vec![
-                    Step::Allow {
-                        patterns: vec!["(?i)meeting".to_string()],
-                        mode: MatchMode::Any,
-                        fields: vec!["summary".to_string()],
-                    },
-                    Step::Replace {
-                        pattern: "Meeting:".to_string(),
-                        replacement: "[WORK]".to_string(),
+    let mut calendars = HashMap::new();
+    calendars.insert(
+        "test".to_string(),
+        CalendarConfig {
+            sources: vec![
+                SourceConfig::Url {
+                    url: format!("{}/work.ics", mock_server.uri()),
+                    steps: vec![
+                        Step::Allow {
+                            patterns: vec!["(?i)meeting".to_string()],
+                            mode: MatchMode::Any,
+                            fields: vec!["summary".to_string()],
+                        },
+                        Step::Replace {
+                            pattern: "Meeting:".to_string(),
+                            replacement: "[WORK]".to_string(),
+                            field: "summary".to_string(),
+                        },
+                    ],
+                },
+                SourceConfig::Url {
+                    url: format!("{}/personal.ics", mock_server.uri()),
+                    steps: vec![Step::Replace {
+                        pattern: "^".to_string(),
+                        replacement: "[PERSONAL] ".to_string(),
                         field: "summary".to_string(),
-                    },
-                ],
-            },
-            SourceConfig {
-                url: format!("{}/personal.ics", mock_server.uri()),
-                steps: vec![Step::Replace {
-                    pattern: "^".to_string(),
-                    replacement: "[PERSONAL] ".to_string(),
-                    field: "summary".to_string(),
-                }],
-            },
-        ],
-        steps: vec![],
+                    }],
+                },
+            ],
+            steps: vec![],
+        },
+    );
+
+    let config = Config {
+        server: ServerConfig::default(),
+        calendars,
     };
 
     let fetcher = Fetcher::new().unwrap();
-    let result = merge_calendars(&config, &fetcher).await.unwrap();
+    let result = merge_calendars("test", &config, &fetcher).await.unwrap();
 
     // Work: 2 meetings allowed (Team standup and Project review)
     // Personal: 2 events, both included
@@ -264,26 +291,35 @@ async fn test_calendar_level_steps() {
         .await;
 
     // Both sources have no filtering, but calendar level applies a global prefix
-    let config = CalendarConfig {
-        sources: vec![
-            SourceConfig {
-                url: format!("{}/work.ics", mock_server.uri()),
-                steps: vec![],
-            },
-            SourceConfig {
-                url: format!("{}/personal.ics", mock_server.uri()),
-                steps: vec![],
-            },
-        ],
-        steps: vec![Step::Replace {
-            pattern: "^".to_string(),
-            replacement: "[MERGED] ".to_string(),
-            field: "summary".to_string(),
-        }],
+    let mut calendars = HashMap::new();
+    calendars.insert(
+        "test".to_string(),
+        CalendarConfig {
+            sources: vec![
+                SourceConfig::Url {
+                    url: format!("{}/work.ics", mock_server.uri()),
+                    steps: vec![],
+                },
+                SourceConfig::Url {
+                    url: format!("{}/personal.ics", mock_server.uri()),
+                    steps: vec![],
+                },
+            ],
+            steps: vec![Step::Replace {
+                pattern: "^".to_string(),
+                replacement: "[MERGED] ".to_string(),
+                field: "summary".to_string(),
+            }],
+        },
+    );
+
+    let config = Config {
+        server: ServerConfig::default(),
+        calendars,
     };
 
     let fetcher = Fetcher::new().unwrap();
-    let result = merge_calendars(&config, &fetcher).await.unwrap();
+    let result = merge_calendars("test", &config, &fetcher).await.unwrap();
 
     // All 5 events should have the prefix
     assert_eq!(result.events.len(), 5);
@@ -308,20 +344,29 @@ async fn test_match_mode_all() {
         .await;
 
     // Allow only events that match ALL patterns
-    let config = CalendarConfig {
-        sources: vec![SourceConfig {
-            url: format!("{}/work.ics", mock_server.uri()),
-            steps: vec![Step::Allow {
-                patterns: vec!["(?i)meeting".to_string(), "(?i)team".to_string()],
-                mode: MatchMode::All,
-                fields: vec!["summary".to_string()],
+    let mut calendars = HashMap::new();
+    calendars.insert(
+        "test".to_string(),
+        CalendarConfig {
+            sources: vec![SourceConfig::Url {
+                url: format!("{}/work.ics", mock_server.uri()),
+                steps: vec![Step::Allow {
+                    patterns: vec!["(?i)meeting".to_string(), "(?i)team".to_string()],
+                    mode: MatchMode::All,
+                    fields: vec!["summary".to_string()],
+                }],
             }],
-        }],
-        steps: vec![],
+            steps: vec![],
+        },
+    );
+
+    let config = Config {
+        server: ServerConfig::default(),
+        calendars,
     };
 
     let fetcher = Fetcher::new().unwrap();
-    let result = merge_calendars(&config, &fetcher).await.unwrap();
+    let result = merge_calendars("test", &config, &fetcher).await.unwrap();
 
     // Only "Meeting: Team standup" matches both "meeting" and "team"
     assert_eq!(result.events.len(), 1);
@@ -344,27 +389,36 @@ async fn test_step_ordering_matters() {
         .await;
 
     // Replace then allow - the allow step sees the replaced text
-    let config = CalendarConfig {
-        sources: vec![SourceConfig {
-            url: format!("{}/work.ics", mock_server.uri()),
-            steps: vec![
-                Step::Replace {
-                    pattern: "(?i)meeting".to_string(),
-                    replacement: "Event".to_string(),
-                    field: "summary".to_string(),
-                },
-                Step::Allow {
-                    patterns: vec!["Event".to_string()],
-                    mode: MatchMode::Any,
-                    fields: vec!["summary".to_string()],
-                },
-            ],
-        }],
-        steps: vec![],
+    let mut calendars = HashMap::new();
+    calendars.insert(
+        "test".to_string(),
+        CalendarConfig {
+            sources: vec![SourceConfig::Url {
+                url: format!("{}/work.ics", mock_server.uri()),
+                steps: vec![
+                    Step::Replace {
+                        pattern: "(?i)meeting".to_string(),
+                        replacement: "Event".to_string(),
+                        field: "summary".to_string(),
+                    },
+                    Step::Allow {
+                        patterns: vec!["Event".to_string()],
+                        mode: MatchMode::Any,
+                        fields: vec!["summary".to_string()],
+                    },
+                ],
+            }],
+            steps: vec![],
+        },
+    );
+
+    let config = Config {
+        server: ServerConfig::default(),
+        calendars,
     };
 
     let fetcher = Fetcher::new().unwrap();
-    let result = merge_calendars(&config, &fetcher).await.unwrap();
+    let result = merge_calendars("test", &config, &fetcher).await.unwrap();
 
     // Only events containing "meeting" (now "Event") should pass
     assert_eq!(result.events.len(), 2);
