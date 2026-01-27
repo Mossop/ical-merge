@@ -5,6 +5,7 @@ use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 use ical_merge::config::Config;
 use ical_merge::error::Result;
 use ical_merge::fetcher::Fetcher;
+use ical_merge::ical::serialize_events;
 use ical_merge::merge::merge_calendars;
 use ical_merge::server::{AppState, create_router};
 use ical_merge::watcher::start_config_watcher;
@@ -35,6 +36,11 @@ enum Command {
         /// Calendar ID from config
         calendar_id: String,
     },
+    /// Output merged calendar as iCal format
+    Ical {
+        /// Calendar ID from config
+        calendar_id: String,
+    },
 }
 
 #[tokio::main]
@@ -55,6 +61,7 @@ async fn main() -> Result<()> {
     }) {
         Command::Serve { bind, port } => run_serve(cli.config, bind, port).await,
         Command::Show { calendar_id } => run_show(cli.config, calendar_id).await,
+        Command::Ical { calendar_id } => run_ical(cli.config, calendar_id).await,
     }
 }
 
@@ -183,13 +190,45 @@ fn compare_date_perhaps_time(
                     date_time.and_utc().timestamp()
                 }
             },
-            DatePerhapsTime::Date(date) => date
-                .and_hms_opt(0, 0, 0)
-                .unwrap()
-                .and_utc()
-                .timestamp(),
+            DatePerhapsTime::Date(date) => date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp(),
         }
     };
 
     to_timestamp(a).cmp(&to_timestamp(b))
+}
+
+async fn run_ical(config_path: PathBuf, calendar_id: String) -> Result<()> {
+    let config = Config::load(&config_path)?;
+    config.validate()?;
+
+    let calendar_config = config
+        .calendars
+        .get(&calendar_id)
+        .ok_or_else(|| ical_merge::error::Error::CalendarNotFound(calendar_id.clone()))?;
+
+    let fetcher = Fetcher::new()?;
+    let result = merge_calendars(calendar_config, &fetcher).await?;
+
+    // Report any errors to stderr
+    for (url, error) in &result.errors {
+        eprintln!("Error fetching {}: {}", url, error);
+    }
+
+    // Sort events by start time
+    let mut events = result.events;
+    events.sort_by(|a, b| {
+        use std::cmp::Ordering;
+        match (a.start(), b.start()) {
+            (Some(start_a), Some(start_b)) => compare_date_perhaps_time(&start_a, &start_b),
+            (Some(_), None) => Ordering::Less, // Events with start time come first
+            (None, Some(_)) => Ordering::Greater, // Events without start time come last
+            (None, None) => Ordering::Equal,
+        }
+    });
+
+    // Serialize to iCal format and output to stdout
+    let ical_output = serialize_events(events);
+    println!("{}", ical_output);
+
+    Ok(())
 }
