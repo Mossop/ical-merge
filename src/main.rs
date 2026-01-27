@@ -12,13 +12,13 @@ use ical_merge::watcher::start_config_watcher;
 #[command(name = "ical-merge")]
 #[command(about = "Merge and filter iCal calendars", long_about = None)]
 struct Cli {
-    #[arg(short, long, default_value = "config.json")]
+    #[arg(short, long, env = "ICAL_MERGE_CONFIG", default_value = "config.json")]
     config: PathBuf,
 
-    #[arg(long)]
+    #[arg(long, env = "ICAL_MERGE_BIND")]
     bind: Option<String>,
 
-    #[arg(short, long)]
+    #[arg(short, long, env = "ICAL_MERGE_PORT")]
     port: Option<u16>,
 }
 

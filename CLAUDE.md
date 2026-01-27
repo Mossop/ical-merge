@@ -204,7 +204,9 @@ Filters and modifiers compile regexes once during config load. Don't compile reg
 }
 ```
 
-Environment variable override: `ICAL_MERGE_SERVER__PORT=9090`
+Environment variable overrides:
+- Config file values: `ICAL_MERGE_SERVER__PORT=9090`
+- CLI arguments: `ICAL_MERGE_CONFIG=/path/to/config.json`, `ICAL_MERGE_BIND=0.0.0.0`, `ICAL_MERGE_PORT=9090`
 
 ## Testing Best Practices
 

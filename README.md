@@ -83,12 +83,27 @@ The config watcher:
 
 ## Environment Variables
 
-Configuration can be overridden with environment variables prefixed with `ICAL_MERGE_`:
+### Server Configuration
+
+Configuration values inside the config file can be overridden with environment variables prefixed with `ICAL_MERGE_`:
 
 ```bash
 export ICAL_MERGE_SERVER__PORT=9090
 cargo run
 ```
+
+### CLI Arguments
+
+CLI arguments can also be set via environment variables:
+
+```bash
+export ICAL_MERGE_CONFIG=/path/to/config.json
+export ICAL_MERGE_BIND=0.0.0.0
+export ICAL_MERGE_PORT=9090
+cargo run
+```
+
+This is useful for Docker deployments where you want to configure everything through environment variables.
 
 ## Testing
 
