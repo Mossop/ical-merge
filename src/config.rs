@@ -89,6 +89,16 @@ pub enum MatchMode {
     All,
 }
 
+/// Case transformation mode
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CaseTransform {
+    Lower,
+    Upper,
+    Sentence,
+    Title,
+}
+
 fn default_step_fields() -> Vec<String> {
     vec!["summary".to_string(), "description".to_string()]
 }
@@ -127,6 +137,11 @@ pub enum Step {
         field: String,
     },
     Strip {
+        field: String,
+    },
+    Case {
+        transform: CaseTransform,
+        #[serde(default = "default_step_field")]
         field: String,
     },
 }
@@ -273,6 +288,9 @@ impl Config {
                             context, idx, field
                         )));
                     }
+                }
+                Step::Case { .. } => {
+                    // No validation needed for case transformation
                 }
             }
         }

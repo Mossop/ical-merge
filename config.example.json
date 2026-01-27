@@ -39,6 +39,11 @@
             {
               "type": "strip",
               "field": "reminder"
+            },
+            {
+              "type": "case",
+              "transform": "sentence",
+              "comment": "Transform can be: lower, upper, sentence, or title. Field defaults to summary."
             }
           ]
         },

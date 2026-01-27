@@ -1,6 +1,6 @@
 use regex::Regex;
 
-use crate::config::{MatchMode, Step};
+use crate::config::{CaseTransform, MatchMode, Step};
 use crate::error::Result;
 use crate::ical::Event;
 
@@ -64,6 +64,10 @@ pub enum CompiledStep {
     Strip {
         field: String,
     },
+    Case {
+        transform: CaseTransform,
+        field: String,
+    },
 }
 
 impl CompiledStep {
@@ -111,6 +115,10 @@ impl CompiledStep {
                 })
             }
             Step::Strip { field } => Ok(Self::Strip {
+                field: field.clone(),
+            }),
+            Step::Case { transform, field } => Ok(Self::Case {
+                transform: transform.clone(),
                 field: field.clone(),
             }),
         }
@@ -179,6 +187,53 @@ impl CompiledStep {
             Self::Strip { field } => {
                 if field.as_str() == "reminder" {
                     event.strip_alarms()
+                }
+
+                StepResult::Keep
+            }
+            Self::Case { transform, field } => {
+                let text = match field.as_str() {
+                    "summary" => event.summary().map(|s| s.to_string()),
+                    "description" => event.description().map(|s| s.to_string()),
+                    "location" => event.location().map(|s| s.to_string()),
+                    _ => None,
+                };
+
+                if let Some(text) = text {
+                    let new_text = match transform {
+                        CaseTransform::Lower => text.to_lowercase(),
+                        CaseTransform::Upper => text.to_uppercase(),
+                        CaseTransform::Sentence => {
+                            let mut chars = text.chars();
+                            match chars.next() {
+                                None => String::new(),
+                                Some(first) => {
+                                    first.to_uppercase().collect::<String>()
+                                        + &chars.as_str().to_lowercase()
+                                }
+                            }
+                        }
+                        CaseTransform::Title => text
+                            .split_whitespace()
+                            .map(|word| {
+                                let mut chars = word.chars();
+                                match chars.next() {
+                                    None => String::new(),
+                                    Some(first) => {
+                                        first.to_uppercase().collect::<String>()
+                                            + &chars.as_str().to_lowercase()
+                                    }
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" "),
+                    };
+                    match field.as_str() {
+                        "summary" => event.set_summary(&new_text),
+                        "description" => event.set_description(&new_text),
+                        "location" => event.set_location(&new_text),
+                        _ => {}
+                    }
                 }
 
                 StepResult::Keep
@@ -553,5 +608,96 @@ mod tests {
         assert_eq!(event.summary(), Some("Event with team"));
         assert_eq!(event.description(), Some("Let's talk about the project"));
         assert_eq!(event.location(), Some("Conference Space A"));
+    }
+
+    #[test]
+    fn test_case_lower() {
+        let step = Step::Case {
+            transform: CaseTransform::Lower,
+            field: "summary".to_string(),
+        };
+        let compiled = CompiledStep::compile(&step).unwrap();
+
+        let mut event = create_event("Meeting With TEAM", None);
+        assert_eq!(compiled.apply(&mut event), StepResult::Keep);
+        assert_eq!(event.summary(), Some("meeting with team"));
+    }
+
+    #[test]
+    fn test_case_upper() {
+        let step = Step::Case {
+            transform: CaseTransform::Upper,
+            field: "summary".to_string(),
+        };
+        let compiled = CompiledStep::compile(&step).unwrap();
+
+        let mut event = create_event("meeting with team", None);
+        assert_eq!(compiled.apply(&mut event), StepResult::Keep);
+        assert_eq!(event.summary(), Some("MEETING WITH TEAM"));
+    }
+
+    #[test]
+    fn test_case_sentence() {
+        let step = Step::Case {
+            transform: CaseTransform::Sentence,
+            field: "summary".to_string(),
+        };
+        let compiled = CompiledStep::compile(&step).unwrap();
+
+        let mut event = create_event("MEETING WITH TEAM", None);
+        assert_eq!(compiled.apply(&mut event), StepResult::Keep);
+        assert_eq!(event.summary(), Some("Meeting with team"));
+
+        let mut event2 = create_event("meeting with team", None);
+        assert_eq!(compiled.apply(&mut event2), StepResult::Keep);
+        assert_eq!(event2.summary(), Some("Meeting with team"));
+    }
+
+    #[test]
+    fn test_case_title() {
+        let step = Step::Case {
+            transform: CaseTransform::Title,
+            field: "summary".to_string(),
+        };
+        let compiled = CompiledStep::compile(&step).unwrap();
+
+        let mut event = create_event("meeting with team", None);
+        assert_eq!(compiled.apply(&mut event), StepResult::Keep);
+        assert_eq!(event.summary(), Some("Meeting With Team"));
+
+        let mut event2 = create_event("MEETING WITH TEAM", None);
+        assert_eq!(compiled.apply(&mut event2), StepResult::Keep);
+        assert_eq!(event2.summary(), Some("Meeting With Team"));
+
+        let mut event3 = create_event("meeting WITH team", None);
+        assert_eq!(compiled.apply(&mut event3), StepResult::Keep);
+        assert_eq!(event3.summary(), Some("Meeting With Team"));
+    }
+
+    #[test]
+    fn test_case_on_description() {
+        let step = Step::Case {
+            transform: CaseTransform::Upper,
+            field: "description".to_string(),
+        };
+        let compiled = CompiledStep::compile(&step).unwrap();
+
+        let mut event = create_event("Meeting", Some("important discussion"));
+        assert_eq!(compiled.apply(&mut event), StepResult::Keep);
+        assert_eq!(event.summary(), Some("Meeting"));
+        assert_eq!(event.description(), Some("IMPORTANT DISCUSSION"));
+    }
+
+    #[test]
+    fn test_case_on_location() {
+        let step = Step::Case {
+            transform: CaseTransform::Lower,
+            field: "location".to_string(),
+        };
+        let compiled = CompiledStep::compile(&step).unwrap();
+
+        let mut event = create_event_with_location("Meeting", None, Some("Conference ROOM A"));
+        assert_eq!(compiled.apply(&mut event), StepResult::Keep);
+        assert_eq!(event.location(), Some("conference room a"));
     }
 }
