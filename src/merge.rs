@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use futures::future::join_all;
 
 use crate::config::{CalendarConfig, SourceConfig};
@@ -17,6 +19,48 @@ impl MergeResult {
     pub fn new(events: Vec<Event>, errors: Vec<(String, Error)>) -> Self {
         Self { events, errors }
     }
+}
+
+/// Type alias for event time boundaries
+type EventTimeBoundary = (Option<i64>, Option<i64>);
+
+/// Convert DatePerhapsTime to timestamp for comparison
+fn date_to_timestamp(dpt: &icalendar::DatePerhapsTime) -> i64 {
+    use icalendar::DatePerhapsTime;
+
+    match dpt {
+        DatePerhapsTime::DateTime(dt) => match dt {
+            icalendar::CalendarDateTime::Floating(naive) => naive.and_utc().timestamp(),
+            icalendar::CalendarDateTime::Utc(utc) => utc.timestamp(),
+            icalendar::CalendarDateTime::WithTimezone { date_time, .. } => {
+                date_time.and_utc().timestamp()
+            }
+        },
+        DatePerhapsTime::Date(date) => date.and_hms_opt(0, 0, 0).unwrap().and_utc().timestamp(),
+    }
+}
+
+/// Extract time boundary (start, end) from an event as timestamps
+fn extract_time_boundary(event: &Event) -> EventTimeBoundary {
+    let start = event.start().map(|dt| date_to_timestamp(&dt));
+    let end = event.end().map(|dt| date_to_timestamp(&dt));
+    (start, end)
+}
+
+/// Deduplicate events by (start, end) time, keeping only the first occurrence
+fn deduplicate_events(events: Vec<Event>) -> Vec<Event> {
+    let mut seen = HashSet::new();
+    let mut deduplicated = Vec::new();
+
+    for event in events {
+        let time_boundary = extract_time_boundary(&event);
+
+        if seen.insert(time_boundary) {
+            deduplicated.push(event);
+        }
+    }
+
+    deduplicated
 }
 
 /// Fetch and merge calendars according to config
@@ -39,7 +83,10 @@ pub async fn merge_calendars(config: &CalendarConfig, fetcher: &Fetcher) -> Resu
         }
     }
 
-    Ok(MergeResult::new(all_events, errors))
+    // Deduplicate events by (start, end) time
+    let deduplicated_events = deduplicate_events(all_events);
+
+    Ok(MergeResult::new(deduplicated_events, errors))
 }
 
 /// Fetch and process a single source
@@ -264,5 +311,118 @@ END:VCALENDAR"#;
         assert_eq!(result.events.len(), 2);
         assert_eq!(result.errors.len(), 1);
         assert!(result.errors[0].0.contains("notfound.ics"));
+    }
+
+    #[tokio::test]
+    async fn test_deduplication_by_time() {
+        let mock_server = MockServer::start().await;
+
+        // Two calendars with overlapping events (same start/end times)
+        const CAL_WITH_DUP1: &str = r#"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:event1@example.com
+DTSTAMP:20231201T120000Z
+DTSTART:20231201T140000Z
+DTEND:20231201T150000Z
+SUMMARY:Meeting from Calendar 1
+END:VEVENT
+BEGIN:VEVENT
+UID:event2@example.com
+DTSTAMP:20231202T120000Z
+DTSTART:20231202T140000Z
+DTEND:20231202T150000Z
+SUMMARY:Unique Event 1
+END:VEVENT
+END:VCALENDAR"#;
+
+        const CAL_WITH_DUP2: &str = r#"BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Test//Test//EN
+BEGIN:VEVENT
+UID:different-uid@example.com
+DTSTAMP:20231201T120000Z
+DTSTART:20231201T140000Z
+DTEND:20231201T150000Z
+SUMMARY:Meeting from Calendar 2
+DESCRIPTION:This is a duplicate time slot
+END:VEVENT
+BEGIN:VEVENT
+UID:event3@example.com
+DTSTAMP:20231203T120000Z
+DTSTART:20231203T140000Z
+DTEND:20231203T150000Z
+SUMMARY:Unique Event 2
+END:VEVENT
+END:VCALENDAR"#;
+
+        Mock::given(method("GET"))
+            .and(path("/cal1.ics"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(CAL_WITH_DUP1))
+            .mount(&mock_server)
+            .await;
+
+        Mock::given(method("GET"))
+            .and(path("/cal2.ics"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(CAL_WITH_DUP2))
+            .mount(&mock_server)
+            .await;
+
+        let config = CalendarConfig {
+            sources: vec![
+                SourceConfig {
+                    url: format!("{}/cal1.ics", mock_server.uri()),
+                    filters: FilterConfig::default(),
+                    modifiers: vec![],
+                },
+                SourceConfig {
+                    url: format!("{}/cal2.ics", mock_server.uri()),
+                    filters: FilterConfig::default(),
+                    modifiers: vec![],
+                },
+            ],
+        };
+
+        let fetcher = Fetcher::new().unwrap();
+        let result = merge_calendars(&config, &fetcher).await.unwrap();
+
+        // Should have 3 events: 2 from cal1, 1 from cal2 (duplicate removed)
+        assert_eq!(result.events.len(), 3);
+        assert_eq!(result.errors.len(), 0);
+
+        // First event with 2023-12-01 14:00-15:00 should be from Calendar 1
+        let first_meeting = result
+            .events
+            .iter()
+            .find(|e| e.summary() == Some("Meeting from Calendar 1"));
+        assert!(
+            first_meeting.is_some(),
+            "First occurrence should be kept (from Calendar 1)"
+        );
+
+        // Second occurrence from Calendar 2 should be filtered out
+        let second_meeting = result
+            .events
+            .iter()
+            .find(|e| e.summary() == Some("Meeting from Calendar 2"));
+        assert!(
+            second_meeting.is_none(),
+            "Duplicate from Calendar 2 should be removed"
+        );
+
+        // Both unique events should be present
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|e| e.summary() == Some("Unique Event 1"))
+        );
+        assert!(
+            result
+                .events
+                .iter()
+                .any(|e| e.summary() == Some("Unique Event 2"))
+        );
     }
 }
