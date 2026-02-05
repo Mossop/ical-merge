@@ -10,82 +10,12 @@ The configuration defines a set of virtual calendars. Each has an ID which expos
 
 Processing steps are applied to every event, these steps can modify and potentially reject events. Each calendar source can define a set of steps to be applied to every event from that source and then a set of global steps can be defined for the virtual calendar which will be applied to every event from every source for that calendar. The global steps apply after the steps for each source have been applied. Steps are applied sequentially and remaining steps are skipped if a step rejects an event.
 
-### JSON Example
+### Example Configurations
 
-Create a `config.json` file:
+See the example configuration files for complete, documented examples:
 
-```json
-{
-  "calendars": {
-    "my-calendar": {
-      "sources": [
-        {
-          "url": "https://example.com/calendar.ics",
-          "steps": [
-            {
-              "type": "deny",
-              "patterns": ["(?i)optional"],
-              "fields": ["summary"]
-            },
-            {
-              "type": "allow",
-              "patterns": ["(?i)meeting"]
-            },
-            {
-              "type": "replace",
-              "pattern": "^Meeting:",
-              "replacement": "[WORK] ",
-              "field": "summary"
-            },
-            {
-              "type": "case",
-              "transform": "title"
-            }
-          ]
-        }
-      ],
-      "steps": []
-    }
-  }
-}
-```
-
-### TOML Example
-
-Or create a `config.toml` file:
-
-```toml
-[calendars.my-calendar]
-
-[[calendars.my-calendar.sources]]
-url = "https://example.com/calendar.ics"
-
-# Deny optional events
-[[calendars.my-calendar.sources.steps]]
-type = "deny"
-patterns = ["(?i)optional"]
-fields = ["summary"]
-
-# Only allow meetings
-[[calendars.my-calendar.sources.steps]]
-type = "allow"
-patterns = ["(?i)meeting"]
-
-# Add prefix
-[[calendars.my-calendar.sources.steps]]
-type = "replace"
-pattern = "^Meeting:"
-replacement = "[WORK] "
-field = "summary"
-
-# Transform to title case
-[[calendars.my-calendar.sources.steps]]
-type = "case"
-transform = "title"
-
-# No calendar-level steps
-calendars.my-calendar.steps = []
-```
+- **JSON format**: [config.example.json](config.example.json)
+- **TOML format**: [config.example.toml](config.example.toml)
 
 ### Available Step Types
 

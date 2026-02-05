@@ -821,4 +821,58 @@ calendars.derived.steps = []
 
         fs::remove_file(config_path).unwrap();
     }
+
+    #[test]
+    fn test_example_configs_parse_correctly() {
+        // Test config.example.json
+        let json_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("config.example.json");
+        let json_config =
+            Config::load(&json_path).expect("config.example.json should parse correctly");
+        json_config
+            .validate()
+            .expect("config.example.json should be valid");
+
+        // Verify basic structure of example JSON config
+        assert!(
+            json_config.calendars.contains_key("combined-work"),
+            "config.example.json should contain 'combined-work' calendar"
+        );
+        assert!(
+            json_config.calendars.contains_key("personal"),
+            "config.example.json should contain 'personal' calendar"
+        );
+        assert!(
+            json_config.calendars.contains_key("everything"),
+            "config.example.json should contain 'everything' calendar"
+        );
+
+        // Test config.example.toml
+        let toml_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("config.example.toml");
+        let toml_config =
+            Config::load(&toml_path).expect("config.example.toml should parse correctly");
+        toml_config
+            .validate()
+            .expect("config.example.toml should be valid");
+
+        // Verify basic structure of example TOML config
+        assert!(
+            toml_config.calendars.contains_key("combined-work"),
+            "config.example.toml should contain 'combined-work' calendar"
+        );
+        assert!(
+            toml_config.calendars.contains_key("personal"),
+            "config.example.toml should contain 'personal' calendar"
+        );
+        assert!(
+            toml_config.calendars.contains_key("everything"),
+            "config.example.toml should contain 'everything' calendar"
+        );
+
+        // Verify both configs have equivalent structure
+        assert_eq!(
+            json_config.calendars.len(),
+            toml_config.calendars.len(),
+            "JSON and TOML examples should have same number of calendars"
+        );
+    }
 }
