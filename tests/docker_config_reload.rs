@@ -21,7 +21,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use testcontainers::core::{ContainerPort, Host, WaitFor};
+use testcontainers::core::{ContainerPort, WaitFor};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{GenericImage, ImageExt};
 use tokio::time::sleep;
@@ -79,12 +79,20 @@ async fn test_config_reload_in_docker_container() {
     let temp_dir = tempfile::tempdir().unwrap();
     let config_path = temp_dir.path().join("config.json");
 
-    // Get mock server URL - use host.docker.internal on all platforms
-    // On Linux, we add this as a host mapping; on Mac/Windows it's built-in
-    let mock_url = format!(
-        "http://host.docker.internal:{}/calendar.ics",
-        mock_server.address().port()
-    );
+    // Get mock server URL
+    // On Linux with host networking, use localhost directly
+    // On Mac/Windows, use host.docker.internal
+    let mock_url = if cfg!(target_os = "linux") {
+        format!(
+            "http://127.0.0.1:{}/calendar.ics",
+            mock_server.address().port()
+        )
+    } else {
+        format!(
+            "http://host.docker.internal:{}/calendar.ics",
+            mock_server.address().port()
+        )
+    };
 
     // Write initial config with one calendar
     let mut calendars = HashMap::new();
@@ -110,7 +118,6 @@ async fn test_config_reload_in_docker_container() {
     println!("Starting container...");
 
     // Create container with mounted config
-    // Use --network=host on Linux for easier host access in CI
     let mut image = GenericImage::new("ical-merge-test", "latest")
         .with_exposed_port(ContainerPort::Tcp(8080))
         .with_wait_for(WaitFor::message_on_stdout("Server listening"))
@@ -121,19 +128,25 @@ async fn test_config_reload_in_docker_container() {
         .with_env_var("ICAL_MERGE_CONFIG", "/app/config/config.json")
         .with_env_var("RUST_LOG", "ical_merge=debug,tower_http=debug");
 
-    // On Linux, add host.docker.internal -> host-gateway mapping for CI compatibility
+    // On Linux (GitHub Actions), use host networking for reliable host access
+    // On Mac/Windows, use host.docker.internal which is built-in
     if cfg!(target_os = "linux") {
-        image = image.with_host("host.docker.internal", Host::HostGateway);
+        image = image.with_network("host");
     }
 
     let container = image.start().await.expect("Failed to start container");
 
-    let host_port = container
-        .get_host_port_ipv4(8080)
-        .await
-        .expect("Failed to get host port");
-
-    let base_url = format!("http://127.0.0.1:{}", host_port);
+    // On Linux with host networking, the app is directly on port 8080
+    // On Mac/Windows, we need to get the mapped port
+    let base_url = if cfg!(target_os = "linux") {
+        "http://127.0.0.1:8080".to_string()
+    } else {
+        let host_port = container
+            .get_host_port_ipv4(8080)
+            .await
+            .expect("Failed to get host port");
+        format!("http://127.0.0.1:{}", host_port)
+    };
     println!("Container started, accessible at {}", base_url);
 
     // Give container a moment to fully initialize
@@ -149,11 +162,16 @@ async fn test_config_reload_in_docker_container() {
         .await
         .expect("Failed to make initial request");
 
-    assert_eq!(response.status(), 200, "Initial request should succeed");
+    let status = response.status();
+    println!("Response status: {}", status);
+    assert_eq!(status, 200, "Initial request should succeed");
     let body = response.text().await.unwrap();
+    println!("Response body length: {}", body.len());
+    println!("Response body preview: {}", &body[..body.len().min(200)]);
     assert!(
         body.contains("Initial Event"),
-        "Should contain initial event"
+        "Should contain initial event. Body: {}",
+        body
     );
     assert!(
         !body.contains("Updated Event"),
@@ -296,15 +314,20 @@ async fn test_docker_config_reload_with_url_change() {
         .with_env_var("ICAL_MERGE_CONFIG", "/app/config/config.json")
         .with_env_var("RUST_LOG", "ical_merge=debug");
 
-    // On Linux, add host.docker.internal -> host-gateway mapping for CI compatibility
+    // On Linux (GitHub Actions), use host networking for reliable host access
     if cfg!(target_os = "linux") {
-        image = image.with_host("host.docker.internal", Host::HostGateway);
+        image = image.with_network("host");
     }
 
     let container = image.start().await.expect("Failed to start container");
 
-    let host_port = container.get_host_port_ipv4(8080).await.unwrap();
-    let base_url = format!("http://127.0.0.1:{}", host_port);
+    // On Linux with host networking, the app is directly on port 8080
+    let base_url = if cfg!(target_os = "linux") {
+        "http://127.0.0.1:8080".to_string()
+    } else {
+        let host_port = container.get_host_port_ipv4(8080).await.unwrap();
+        format!("http://127.0.0.1:{}", host_port)
+    };
 
     sleep(Duration::from_secs(2)).await;
 
@@ -315,8 +338,19 @@ async fn test_docker_config_reload_with_url_change() {
         .send()
         .await
         .unwrap();
+    let status = response.status();
+    println!("Initial request status: {}", status);
     let body = response.text().await.unwrap();
-    assert!(body.contains("Initial Event"));
+    println!("Initial response body length: {}", body.len());
+    println!(
+        "Initial response body preview: {}",
+        &body[..body.len().min(200)]
+    );
+    assert!(
+        body.contains("Initial Event"),
+        "Should contain Initial Event. Body: {}",
+        body
+    );
 
     // Update config to point to second mock server
     let mut calendars = HashMap::new();
@@ -365,9 +399,13 @@ fn get_project_root() -> PathBuf {
 }
 
 fn get_docker_accessible_url(port: u16) -> String {
-    // Use host.docker.internal on all platforms
-    // On Linux, we add this via --add-host; on Mac/Windows it's built-in
-    format!("http://host.docker.internal:{}", port)
+    // On Linux with host networking, use localhost directly
+    // On Mac/Windows, use host.docker.internal (built-in)
+    if cfg!(target_os = "linux") {
+        format!("http://127.0.0.1:{}", port)
+    } else {
+        format!("http://host.docker.internal:{}", port)
+    }
 }
 
 fn ensure_docker_image_built() {
