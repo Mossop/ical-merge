@@ -1,6 +1,6 @@
 # iCal Merge
 
-A lightweight async Rust tool that fetches, filters, modifies, and merges iCal calendars from the web, exposing them via HTTP endpoints.
+A lightweight Rust tool that fetches, filters, modifies, and merges iCal calendars from the web, exposing them via HTTP endpoints.
 
 ## Configuration
 

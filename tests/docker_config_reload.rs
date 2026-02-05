@@ -21,7 +21,7 @@ use std::fs;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
-use testcontainers::core::{ContainerPort, WaitFor};
+use testcontainers::core::{ContainerPort, Host, WaitFor};
 use testcontainers::runners::AsyncRunner;
 use testcontainers::{GenericImage, ImageExt};
 use tokio::time::sleep;
@@ -79,21 +79,12 @@ async fn test_config_reload_in_docker_container() {
     let temp_dir = tempfile::tempdir().unwrap();
     let config_path = temp_dir.path().join("config.json");
 
-    // Get mock server URL - need to use host.docker.internal for Docker to access host
-    let mock_url = if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
-        // On Mac/Windows, Docker Desktop provides host.docker.internal
-        format!(
-            "http://host.docker.internal:{}/calendar.ics",
-            mock_server.address().port()
-        )
-    } else {
-        // On Linux, we need to use the host's IP
-        // For simplicity in CI, we'll use the container's gateway
-        format!(
-            "http://172.17.0.1:{}/calendar.ics",
-            mock_server.address().port()
-        )
-    };
+    // Get mock server URL - use host.docker.internal on all platforms
+    // On Linux, we add this as a host mapping; on Mac/Windows it's built-in
+    let mock_url = format!(
+        "http://host.docker.internal:{}/calendar.ics",
+        mock_server.address().port()
+    );
 
     // Write initial config with one calendar
     let mut calendars = HashMap::new();
@@ -119,7 +110,8 @@ async fn test_config_reload_in_docker_container() {
     println!("Starting container...");
 
     // Create container with mounted config
-    let container = GenericImage::new("ical-merge-test", "latest")
+    // Use --network=host on Linux for easier host access in CI
+    let mut image = GenericImage::new("ical-merge-test", "latest")
         .with_exposed_port(ContainerPort::Tcp(8080))
         .with_wait_for(WaitFor::message_on_stdout("Server listening"))
         .with_mount(testcontainers::core::Mount::bind_mount(
@@ -127,10 +119,14 @@ async fn test_config_reload_in_docker_container() {
             "/app/config/config.json",
         ))
         .with_env_var("ICAL_MERGE_CONFIG", "/app/config/config.json")
-        .with_env_var("RUST_LOG", "ical_merge=debug,tower_http=debug")
-        .start()
-        .await
-        .expect("Failed to start container");
+        .with_env_var("RUST_LOG", "ical_merge=debug,tower_http=debug");
+
+    // On Linux, add host.docker.internal -> host-gateway mapping for CI compatibility
+    if cfg!(target_os = "linux") {
+        image = image.with_host("host.docker.internal", Host::HostGateway);
+    }
+
+    let container = image.start().await.expect("Failed to start container");
 
     let host_port = container
         .get_host_port_ipv4(8080)
@@ -290,7 +286,7 @@ async fn test_docker_config_reload_with_url_change() {
     ensure_docker_image_built();
 
     println!("Starting container...");
-    let container = GenericImage::new("ical-merge-test", "latest")
+    let mut image = GenericImage::new("ical-merge-test", "latest")
         .with_exposed_port(ContainerPort::Tcp(8080))
         .with_wait_for(WaitFor::message_on_stdout("Server listening"))
         .with_mount(testcontainers::core::Mount::bind_mount(
@@ -298,10 +294,14 @@ async fn test_docker_config_reload_with_url_change() {
             "/app/config/config.json",
         ))
         .with_env_var("ICAL_MERGE_CONFIG", "/app/config/config.json")
-        .with_env_var("RUST_LOG", "ical_merge=debug")
-        .start()
-        .await
-        .expect("Failed to start container");
+        .with_env_var("RUST_LOG", "ical_merge=debug");
+
+    // On Linux, add host.docker.internal -> host-gateway mapping for CI compatibility
+    if cfg!(target_os = "linux") {
+        image = image.with_host("host.docker.internal", Host::HostGateway);
+    }
+
+    let container = image.start().await.expect("Failed to start container");
 
     let host_port = container.get_host_port_ipv4(8080).await.unwrap();
     let base_url = format!("http://127.0.0.1:{}", host_port);
@@ -365,12 +365,9 @@ fn get_project_root() -> PathBuf {
 }
 
 fn get_docker_accessible_url(port: u16) -> String {
-    if cfg!(target_os = "macos") || cfg!(target_os = "windows") {
-        format!("http://host.docker.internal:{}", port)
-    } else {
-        // Linux - use Docker's default bridge gateway
-        format!("http://172.17.0.1:{}", port)
-    }
+    // Use host.docker.internal on all platforms
+    // On Linux, we add this via --add-host; on Mac/Windows it's built-in
+    format!("http://host.docker.internal:{}", port)
 }
 
 fn ensure_docker_image_built() {
