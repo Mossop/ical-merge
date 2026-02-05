@@ -16,6 +16,7 @@
 //! Run with: cargo test --test docker_config_reload
 
 use ical_merge::config::{CalendarConfig, Config, SourceConfig, Step};
+use serial_test::serial;
 use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
@@ -63,6 +64,7 @@ END:VCALENDAR
 
 /// Test config hot-reload in Docker container with bind-mounted config file
 #[tokio::test]
+#[serial]
 async fn test_config_reload_in_docker_container() {
     // Start mock calendar server that will be accessible from Docker container
     let mock_server = MockServer::start().await;
@@ -259,6 +261,7 @@ async fn test_config_reload_in_docker_container() {
 
 /// Test that the config reload works with source URL changes
 #[tokio::test]
+#[serial]
 async fn test_docker_config_reload_with_url_change() {
     // Start two mock servers with different content
     let mock_server1 = MockServer::start().await;

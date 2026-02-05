@@ -25,3 +25,4 @@ tower = "0.5"
 testcontainers = "0.23"
 tempfile = "3"
 reqwest = { version = "0.12", features = ["rustls-tls"], default-features = false }
+serial_test = "3"
