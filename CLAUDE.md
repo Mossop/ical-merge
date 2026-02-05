@@ -1,5 +1,7 @@
 # Claude Code Project Guide: iCal Merge
 
+> **Note**: For user-facing documentation including configuration examples, usage instructions, Docker deployment, and environment variables, refer to [README.md](README.md). This guide focuses on architecture, implementation details, and development practices.
+
 ## Project Overview
 
 A lightweight async Rust HTTP server that fetches iCal calendars from URLs or references other virtual calendars, applies configurable processing steps (filter, modify, transform), merges them, and serves the result via HTTP endpoints.
@@ -217,14 +219,6 @@ Production uses 2 second interval, but tests need faster polling.
 3. Add test in `server.rs` tests module
 4. Use `Path`, `State`, etc. extractors as needed
 
-### Running Tests
-```bash
-mise run test       # Uses mise task
-cargo test          # Direct cargo
-cargo test --lib    # Only library tests
-cargo test --test integration  # Only integration tests
-```
-
 ## Important Implementation Details
 
 ### Event UID Extraction
@@ -263,88 +257,6 @@ If we encounter a calendar already in the stack, we've found a cycle. This is O(
 - Polling is reliable across all platforms and mount types
 - 2 second interval is acceptable latency for config changes
 - The watcher is kept alive by moving it into the tokio task
-
-## Configuration Schema
-
-Supports both **JSON** and **TOML** formats (auto-detected by file extension):
-
-```json
-{
-  "server": {
-    "bind_address": "0.0.0.0",   // default: 0.0.0.0
-    "port": 8080                  // default: 8080
-  },
-  "calendars": {
-    "calendar-id": {               // used in URL path
-      "sources": [
-        {
-          "url": "https://...",    // URL source
-          "steps": [               // per-source processing pipeline
-            {
-              "type": "allow",
-              "patterns": ["(?i)meeting"],
-              "mode": "any",       // "any" or "all"
-              "fields": ["summary", "description"]
-            },
-            {
-              "type": "deny",
-              "patterns": ["(?i)optional"]
-            },
-            {
-              "type": "replace",
-              "pattern": "^Meeting:",
-              "replacement": "[WORK] ",
-              "field": "summary"   // summary, description, or location
-            },
-            {
-              "type": "case",
-              "transform": "title", // lower, upper, sentence, or title
-              "field": "summary"
-            },
-            {
-              "type": "strip",
-              "field": "reminder"
-            }
-          ]
-        },
-        {
-          "calendar": "other-cal", // Calendar reference (alternative to url)
-          "steps": []              // Steps applied to referenced calendar's events
-        }
-      ],
-      "steps": []                  // Calendar-level steps (applied after merging all sources)
-    }
-  }
-}
-```
-
-**TOML equivalent**:
-```toml
-[server]
-bind_address = "0.0.0.0"
-port = 8080
-
-[calendars.my-calendar]
-[[calendars.my-calendar.sources]]
-url = "https://example.com/cal.ics"
-
-[[calendars.my-calendar.sources.steps]]
-type = "allow"
-patterns = ["(?i)meeting"]
-
-[[calendars.my-calendar.sources.steps]]
-type = "case"
-transform = "title"
-```
-
-Environment variable overrides:
-- Config file values: `ICAL_MERGE_SERVER__PORT=9090`
-- CLI arguments: `ICAL_MERGE_CONFIG=/path/to/config.json`, `ICAL_MERGE_BIND=0.0.0.0`, `ICAL_MERGE_PORT=9090`
-
-Config file auto-detection (when no `-c` argument):
-1. Checks for `config.toml`
-2. Falls back to `config.json`
-3. Errors if neither found
 
 ## Testing Best Practices
 
@@ -415,73 +327,3 @@ fn create_event(summary: &str, description: Option<&str>) -> Event {
 - Verify source returns valid iCal (not HTML error page)
 - Check `Content-Type` of source
 - Test parsing independently: add `--nocapture` to see parse details
-
-## Development Workflow
-
-1. Make changes
-2. Run tests: `mise run test`
-3. Commit: `jj commit -m "Description"`
-4. Build: `cargo build --release`
-5. Test manually: `./target/release/ical-merge -c test-config.json`
-
-## Docker Deployment
-
-### Multi-Stage Dockerfile
-
-The Dockerfile uses two stages:
-1. **Builder** (rust:alpine): Compiles the Rust binary with musl for static linking
-2. **Runtime** (alpine:latest): Minimal image with just the binary and CA certs
-
-**Why alpine for runtime?**
-- Small size (~15MB total)
-- Has shell for debugging
-- CA certificates package available
-- Timezone data for proper time handling
-
-**Alternatives considered:**
-- `scratch`: Even smaller but no shell, harder to debug, no CA certs
-- `distroless`: Good middle ground but alpine is more familiar
-
-### Building
-
-```bash
-docker build -t ical-merge .
-```
-
-Build time optimizations:
-- Uses `--locked` to ensure reproducible builds
-- `.dockerignore` excludes target/ directory
-- Multi-stage keeps runtime image small
-
-### Running
-
-Key considerations:
-- Bind mount config file (`.toml` or `.json`) for hot-reload to work
-- Mount as read-only (`:ro`) for security
-- Set `RUST_LOG` for logging level
-- Expose appropriate port
-- Non-root user (icalmerge:1000) for security
-
-### Config Hot-Reload in Docker
-
-The PollWatcher was specifically chosen because it works reliably with Docker bind mounts:
-- Filesystem events often don't propagate through bind mounts
-- Polling always works, regardless of host OS or mount type
-- 2 second interval is acceptable for config changes
-
-## Quick Reference
-
-**Start server**: `cargo run` (auto-detects config.toml or config.json)
-**With specific config**: `cargo run -- -c config.json` or `cargo run -- -c config.toml`
-**Run tests**: `mise run test`
-**Show calendar events**: `cargo run -- show my-calendar`
-**Output iCal format**: `cargo run -- ical my-calendar > output.ics`
-**Build release**: `cargo build --release`
-**Build Docker**: `docker build -t ical-merge .`
-**Run Docker**: `docker-compose up -d`
-**Fetch calendar**: `curl http://localhost:8080/ical/{id}`
-**Override port**: `cargo run -- serve --port 9090`
-**Override bind**: `cargo run -- serve --bind 0.0.0.0 --port 9090`
-**Debug logging**: `RUST_LOG=debug cargo run`
-**Check for issues**: `cargo clippy --all-targets --all-features`
-**Format code**: `cargo fmt`

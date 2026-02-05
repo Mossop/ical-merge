@@ -6,16 +6,16 @@ A lightweight async Rust tool that fetches, filters, modifies, and merges iCal c
 
 Configuration files can be in either **JSON** or **TOML** format. If no config is specified, the tool will auto-detect `config.toml` or `config.json` in the current directory.
 
+The configuration defines a set of virtual calendars. Each has an ID which exposes the calendar at the `/ical/<id>` http endpoint. Each virtual calendar is composed of a set of sources which are either calendars available from a url (`http`, `https`, `webcal` and `webcals` protocols supported) or an existing virtual calendar can be used as a source.
+
+Processing steps are applied to every event, these steps can modify and potentially reject events. Each calendar source can define a set of steps to be applied to every event from that source and then a set of global steps can be defined for the virtual calendar which will be applied to every event from every source for that calendar. The global steps apply after the steps for each source have been applied. Steps are applied sequentially and remaining steps are skipped if a step rejects an event.
+
 ### JSON Example
 
 Create a `config.json` file:
 
 ```json
 {
-  "server": {
-    "bind_address": "0.0.0.0",
-    "port": 8080
-  },
   "calendars": {
     "my-calendar": {
       "sources": [
@@ -55,10 +55,6 @@ Create a `config.json` file:
 Or create a `config.toml` file:
 
 ```toml
-[server]
-bind_address = "0.0.0.0"
-port = 8080
-
 [calendars.my-calendar]
 
 [[calendars.my-calendar.sources]]
@@ -91,11 +87,7 @@ transform = "title"
 calendars.my-calendar.steps = []
 ```
 
-### Processing Steps
-
-Events are processed through a pipeline of steps. Steps are applied in order, and processing stops if an event is rejected by a filter.
-
-#### Available Step Types
+### Available Step Types
 
 **Allow** - Only keep events matching patterns:
 
@@ -164,67 +156,6 @@ Events are processed through a pipeline of steps. Steps are applied in order, an
 
 - `field`: `"reminder"` (only supported field currently)
 
-### Step Execution
-
-- **Source-level steps**: Applied to events from that specific source before merging
-- **Calendar-level steps**: Applied to all events after merging from all sources
-- **Order matters**: Steps are executed sequentially in the order defined
-
-### Filter Logic
-
-For allow/deny steps:
-
-- When only allow steps are present, events must match at least one
-- When only deny steps are present, events must not match any
-- When both are present, events must not match any deny AND must match at least one allow
-- `mode: "all"` requires all patterns to match; `mode: "any"` requires at least one
-
-### Calendar References
-
-You can reference other calendars as sources:
-
-```json
-{
-  "calendars": {
-    "base": {
-      "sources": [{"url": "https://example.com/cal.ics"}]
-    },
-    "derived": {
-      "sources": [
-        {
-          "calendar": "base",
-          "steps": [
-            {
-              "type": "replace",
-              "pattern": "^",
-              "replacement": "[DERIVED] "
-            }
-          ]
-        }
-      ]
-    }
-  }
-}
-```
-
-This allows composing calendars from other calendars with additional processing.
-
-### Supported URL Schemes
-
-The tool supports standard HTTP(S) URLs as well as calendar-specific schemes:
-
-- `http://` and `https://` - Standard web URLs
-- `webcal://` - Automatically converted to `http://`
-- `webcals://` - Automatically converted to `https://`
-
-Example:
-
-```json
-{
-  "url": "webcal://example.com/calendar.ics"
-}
-```
-
 ## Usage
 
 ### Local Development
@@ -270,21 +201,11 @@ curl http://localhost:8080/ical/my-calendar
 **Using docker run:**
 
 ```bash
-# With config.toml
 docker run -d \
-  --name ical-merge \
   -p 8080:8080 \
   -v $(pwd)/config.toml:/app/config.toml:ro \
   -e RUST_LOG=ical_merge=info \
-  ical-merge
-
-# Or with config.json
-docker run -d \
-  --name ical-merge \
-  -p 8080:8080 \
-  -v $(pwd)/config.json:/app/config.json:ro \
-  -e RUST_LOG=ical_merge=info \
-  ical-merge
+  ghcr.io/mossop/ical-merge:latest
 ```
 
 **Using docker-compose:**
@@ -295,33 +216,15 @@ docker-compose up -d
 
 The docker-compose.yml is already configured to:
 
-- Mount your local config file (supports both `.toml` and `.json`)
+- Mount your local config file
 - Expose port 8080
 - Auto-restart on failure
-- Use PollWatcher for reliable config hot-reload with bind mounts
 
 ### Hot-Reload Configuration
 
 Simply edit your config file (`config.toml` or `config.json`) and save - changes are automatically detected and applied within ~2 seconds. No server restart needed!
 
-The config watcher:
-
-- Uses polling (not filesystem events) for Docker bind mount compatibility
-- Validates new config before applying
-- Keeps old config if new one is invalid
-- Logs all reload attempts
-- Works with both TOML and JSON formats
-
 ## Environment Variables
-
-### Server Configuration
-
-Configuration values inside the config file can be overridden with environment variables prefixed with `ICAL_MERGE_`:
-
-```bash
-export ICAL_MERGE_SERVER__PORT=9090
-cargo run
-```
 
 ### CLI Arguments
 
@@ -338,20 +241,6 @@ export ICAL_MERGE_PORT=9090
 cargo run
 ```
 
-This is useful for Docker deployments where you want to configure everything through environment variables.
-
-**Docker example:**
-
-```bash
-docker run -d \
-  --name ical-merge \
-  -p 9090:9090 \
-  -v $(pwd)/config.toml:/app/config.toml:ro \
-  -e ICAL_MERGE_CONFIG=/app/config.toml \
-  -e RUST_LOG=ical_merge=info \
-  ical-merge serve --bind 0.0.0.0 --port 9090
-```
-
 ## Testing
 
 Run all tests:
@@ -365,21 +254,6 @@ Or with mise:
 ```bash
 mise run test
 ```
-
-## Docker Image Details
-
-The Docker image uses a multi-stage build:
-
-- **Builder**: rust:alpine with build dependencies
-- **Runtime**: alpine:latest (~10MB) with just the binary and CA certificates
-
-Benefits:
-
-- Minimal runtime image (~15MB total)
-- Non-root user for security
-- CA certificates for HTTPS requests
-- Timezone data included
-- Config hot-reload works with bind mounts
 
 ## License
 

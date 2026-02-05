@@ -12,6 +12,5 @@ services:
       # Mount config file
       - ./config.json:/app/config/config.json:ro
     environment:
-      - ICAL_MERGE_CONFIG=/app/config/config.json
       - RUST_LOG=ical_merge=info
     restart: unless-stopped
