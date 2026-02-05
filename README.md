@@ -255,6 +255,24 @@ Or with mise:
 mise run test
 ```
 
+### Docker Integration Tests
+
+The project includes Docker-based integration tests that verify config hot-reload works correctly in containerized environments. These tests use testcontainers to:
+
+- Build and start the app in a Docker container
+- Mount a config file as a bind mount
+- Verify initial configuration works
+- Modify the config file on the host
+- Verify the container detects changes and reloads configuration
+
+To run only these tests:
+
+```bash
+cargo test --test docker_config_reload
+```
+
+**Note:** These tests require Docker to be running and take longer to execute because they build the Docker image and start containers. The tests automatically build the Docker image using the project's Dockerfile before running.
+
 ## License
 
 MIT
